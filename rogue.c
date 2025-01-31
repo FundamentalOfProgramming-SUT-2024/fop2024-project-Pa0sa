@@ -25,7 +25,10 @@ typedef struct{
     int gold;
     int hunger;
     int normal_food, magic_food , quality_food , rotenflesh;
-    char weapon[50];
+    int Health_potin, Speed_potion , Damage_potion;   
+    int magic_wand , arrows, dagger , sword , mace;
+    char weapon_name[50];
+    int weapon;
     time_t time_limit;
     time_t start_time;
     int speed ;
@@ -61,6 +64,9 @@ int elapsed = 0;
 int difficulty = 0;
 int hunger = 0;
 int damage = 0;
+int healing = 0;
+int healing_speed = 1;
+int on_potions = 0;
 int x1[6][10];
 int y_1[6][10];
 int x2[6][10];
@@ -82,6 +88,7 @@ void get_user_password(Game *g,FILE *fptr);
 void get_user_email(Game *g,FILE *fptr);
 bool check_username(char * name);
 bool check_user_password(char * password);
+void random_password_generator();
 bool check_user_email(char * email);
 
 void log_into_account(Game *g);
@@ -390,6 +397,7 @@ void get_user_password(Game *g,FILE *fptr){
     clear();
     draw_menu_border();
     echo();
+    mvprintw(LINES / 2, COLS / 2 - 15, "Enter R for random Generation ");
     mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your password: ");
     getnstr(g->password, 50);
     noecho();
@@ -398,6 +406,7 @@ void get_user_password(Game *g,FILE *fptr){
         draw_menu_border();
         echo();
         mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Password is too weak.");
+        mvprintw(LINES / 2, COLS / 2 - 15, "Enter R for random Generation ");
         mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your password: ");
         getnstr(g->password, 50);
         noecho();
@@ -411,6 +420,9 @@ void get_user_password(Game *g,FILE *fptr){
     noecho();
 }
 bool check_user_password(char * password){
+    if (strcmp(password , "R") == 0){
+        random_password_generator(password);
+    }
     if(strlen(password) >= 7){
     for(int i = 0 ; i < strlen(password) ; i++){
     if (password[i] >= 'A' && password[i] <= 'Z'){
@@ -421,6 +433,25 @@ bool check_user_password(char * password){
     return false;
     }}}}}}}
     return true;
+}
+void random_password_generator(char * password){
+    char pass[30];
+    pass[0] = (char)(rand()%24) + 65;
+    pass[1] = (char)(rand()%22) + 34;
+    pass[2] = (char)(rand()%22) + 34;
+    pass[3] = (char)(rand()%11) + 47;
+    pass[4] = (char)(rand()%24) + 97;
+    pass[5] = (char)(rand()%24) + 65;
+    pass[6] = (char)(rand()%24) + 97;
+    pass[7] = (char)(rand()%11) + 34;
+    pass[8] = (char)(rand()%24) + 97;
+    pass[9] = (char)(rand()%24) + 65;
+    pass[10] = (char)(rand()%24) + 97;
+    pass[11] = (char)(rand()%22) + 33;
+    pass[12] = (char)(rand()%11) + 46;
+    strcat(password ,pass);
+    mvprintw(LINES / 2 + 1, COLS / 2 - 15, "Your password is: %s" , password);
+    getch();    
 }
 void get_user_email(Game *g,FILE *fptr){
     clear();
@@ -620,9 +651,42 @@ void draw_rooms(){
                     attroff(COLOR_PAIR(3));
                     refresh();
                 }
+                else if(map[l][j][i].layer == 30 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(1));  
+                } 
+                else if(map[l][j][i].layer == 31 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(5));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(5));  
+                } 
+                else if(map[l][j][i].layer == 32 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(2));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(2));  
+                }  
+                else if(map[l][j][i].signs == 'a'){
+                    attron(COLOR_PAIR(6));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(6));  
+                } 
+                else if(map[l][j][i].signs == 'm'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(8)); 
+                    refresh(); 
+                }  
+                else if(l == 3 && j>=y_1[l][3] && j <= y2[l][3] && i>=x1[l][3]
+                 && i<=x2[l][3] && map[l][j][i].signs != '+'){
+                    attron(COLOR_PAIR(3));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(3)); 
+                    refresh();                     
+                }   
                 else{
                     mvprintw( j , i , "%c" , map[l][j][i].signs);
-                }
+                }             
             }
         }
     }
@@ -633,6 +697,7 @@ void draw_rooms(){
         mvprintw( j, 92 , "|");
     }
     mvprintw(34 , 2 , "Massages");
+
 }
 
 
@@ -862,23 +927,24 @@ void Set_game_difficulty(){
 
 void Set_colors(){
     init_pair(0, COLOR_WHITE, COLOR_BLACK);
-        init_color(1, 0, 1000, 0);
-        init_color(2, 1000, 0, 0);
-        init_color(3, 1000, 800, 0);
-        init_color(4, 1000, 412, 705);
-        // init_color(6, 1000, 412, 705);
-        // init_color(6, 1000, 412, 705);
-        // init_color(6, 1000, 412, 705);
+        init_color(1, 0, 1000, 0);/*Green*/
+        init_color(2, 1000, 0, 0);/*Red*/
+        init_color(3, 1000, 800, 0);/*Gold*/
+        init_color(4, 1000, 412, 705);/*Pink*/
+        init_color(5, 341, 420, 940);/*Light Blue*/
+        init_color(6, 624, 1000, 643);/*Light Green*/
+        init_color(8, 811, 616, 805);/*light purple*/
         // init_color(6, 1000, 412, 705);
     init_pair(1, 1, COLOR_BLACK);
     init_pair(2, 2, COLOR_BLACK);
     init_pair(3, 3, COLOR_BLACK);
     init_pair(4, 4, COLOR_BLACK);
-    // init_pair(5, 5, COLOR_BLACK);
-    // init_pair(6, 6, COLOR_BLACK);
-    // init_pair(7, COLOR_BLUE, COLOR_BLACK);
-    init_pair(5, COLOR_CYAN, COLOR_BLACK);
+    init_pair(5, 5, COLOR_BLACK);
+    init_pair(6, 6, COLOR_BLACK);
+    init_pair(7, 7, COLOR_BLACK);
+    init_pair(8, 8, COLOR_BLACK);
 
+    init_color(7, 1000, 1000, 1000);/*Text Color*/
 }
 int Set_player_color(){
     draw_menu_border();
@@ -923,18 +989,40 @@ void draw_player(Game g){
 }
 
 void draw_hungerbar(){
+    if (elapsed == 0){
+        if (healing%40 == 0){
+            damage -= 1;
+            if (damage < 0) damage = 0;
+            output_massages(8);
+        }
+        else if((healing - 1)%40 == 0){
+            damage -= 1;
+            if (damage < 0) damage = 0;
+            output_massages(8);
+        }
+    } 
     hunger++;
-    if(g.speed == 1){
-        if (hunger == 60 - difficulty){
+    if (elapsed == 0){
+        healing += healing_speed;
+        if(healing == 200 || healing == 199 ){
+            elapsed += 1;
             hunger = 0;
-            elapsed++;
+            healing = 0;
         }
     }
     else{
-        if (hunger == 30 - difficulty/2){
-            hunger = 0;
-            elapsed++;
-        }        
+        if(g.speed == 1){
+            if (hunger == 60 - difficulty){
+                hunger = 0;
+                elapsed++;
+            }
+        }
+        else{
+            if (hunger == 30 - difficulty/2){
+                hunger = 0;
+                elapsed++;
+            }        
+        }
     }
     int remaining = 100 - elapsed;
     float fraction = (float)remaining / 100;
@@ -988,30 +1076,168 @@ void draw_food_count(){
     mvprintw(40, 93, "Normal Food: %d ", g.normal_food);
     mvprintw(41, 93, "Roten Flesh: %d ", g.rotenflesh);
 }
-
-void food_menu(){
+void weapon_menu(){
     timeout(-1);
-    const char *levels[] = {"Normal", "Magical" ,"Quality", "Roten Flesh"};
+    const char *levels[] = {"Magic Wand","Arrows","Dagger","Mace","sword" , "Resume"};
     int choice = 0;
     while (1){
         draw_menu_border();
         mvprintw(1, 1, " ");
-        for (int i = 0; i < 4; ++i){
+            mvprintw(35, 158, "Range");
+            mvprintw(39, 158, "Melee");
+        for (int i = 0; i < 6; ++i){
             if (i == choice)
                 attron(A_REVERSE);
-            if(i == 0) mvprintw(35 + i, 158, "%d %s", g.normal_food , levels[i] );
-            if(i == 1) mvprintw(35 + i, 158, "%d %s", g.magic_food , levels[i] );
-            if(i == 2) mvprintw(35 + i, 158, "%d %s", g.quality_food , levels[i] );
-            if(i == 3) mvprintw(35 + i, 158, "%d %s", g.rotenflesh , levels[i] );           
+            if(i == 0) mvprintw(36 + i, 160, "%d %s", g.magic_wand , levels[i] );
+            if(i == 1) mvprintw(36 + i, 160, "%d %s", g.arrows , levels[i] );
+            if(i == 2) mvprintw(36 + i, 160, "%d %s", g.dagger , levels[i] );
+            if(i == 3) mvprintw(37 + i, 160, "%s", levels[i] );    
+            if(i == 4) mvprintw(37 + i, 160, "%s" , levels[i] );     
+            if(i == 5) mvprintw(38 + i, 158, "%s" , levels[i] );      
+            if (i == choice)
+                attroff(A_REVERSE);
+        }
+        int ch = getch();
+        if (ch == KEY_UP)
+            choice = (choice == 0) ? 5 : choice - 1;
+        else if (ch == KEY_DOWN)
+            choice = (choice == 5) ? 0 : choice + 1;
+        else if (ch == 10)
+            break;
+    }
+    for (int j = 35 ; j <= 45 ; j++){
+        for (int i = 158 ; i <= 182 ; i++){
+            mvprintw( j , i , " ");
+        }
+    }
+
+    switch (choice){
+    case 0:
+        if(g.Health_potin > 0){
+            damage -= 3;
+            if (damage < 0)damage = 0;
+            on_potions = 1;
+            healing_speed = 2;
+            output_massages(17);
+            g.Health_potin -= 1;
+        }
+        break;
+    case 1:
+        if(g.Speed_potion > 0){
+            g.speed = 2;
+            on_potions = 1;
+            output_massages(18);
+            g.Speed_potion -= 1;
+        }
+        break;
+    case 2:
+        if(g.Damage_potion > 0){
+//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
+
+        }
+        break;
+    case 3:
+        difficulty = 0;
+        break;
+    default:
+        clear();
+    }    
+    timeout(40);
+    refresh();
+}
+
+void magic_menu(){
+    timeout(-1);
+    const char *levels[] = {"Heath", "Speed" ,"Damage", "Roten Flesh" , "Resume"};
+    int choice = 0;
+    while (1){
+        draw_menu_border();
+        mvprintw(1, 1, " ");
+        for (int i = 0; i < 5; ++i){
+            if (i == choice)
+                attron(A_REVERSE);
+            if(i == 0) mvprintw(35 + i, 158, "%d %s", g.Health_potin , levels[i] );
+            if(i == 1) mvprintw(35 + i, 158, "%d %s", g.Speed_potion , levels[i] );
+            if(i == 2) mvprintw(35 + i, 158, "%d %s", g.Damage_potion , levels[i] );
+            if(i == 3) mvprintw(35 + i, 158, "%d %s", g.rotenflesh , levels[i] );  
+            if(i == 4) mvprintw(35 + i, 158, "%s",levels[i] );          
             if (i == choice)
                 attroff(A_REVERSE);
         }
 
         int ch = getch();
         if (ch == KEY_UP)
-            choice = (choice == 0) ? 3 : choice - 1;
+            choice = (choice == 0) ? 4 : choice - 1;
         else if (ch == KEY_DOWN)
-            choice = (choice == 3) ? 0 : choice + 1;
+            choice = (choice == 4) ? 0 : choice + 1;
+        else if (ch == 10)
+            break;
+    }
+    for (int j = 35 ; j <= 45 ; j++){
+        for (int i = 158 ; i <= 182 ; i++){
+            mvprintw( j , i , " ");
+        }
+    }
+
+    switch (choice){
+    case 0:
+        if(g.Health_potin > 0){
+            damage -= 3;
+            if (damage < 0)damage = 0;
+            on_potions = 1;
+            healing_speed = 2;
+            output_massages(17);
+            g.Health_potin -= 1;
+        }
+        break;
+    case 1:
+        if(g.Speed_potion > 0){
+            g.speed = 2;
+            on_potions = 1;
+            output_massages(18);
+            g.Speed_potion -= 1;
+        }
+        break;
+    case 2:
+        if(g.Damage_potion > 0){
+//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
+
+        }
+        break;
+    case 3:
+        difficulty = 0;
+        break;
+    default:
+        clear();
+    }    
+
+    timeout(40);
+    refresh();
+}
+void food_menu(){
+    timeout(-1);
+    const char *levels[] = {"Normal", "Magical" ,"Quality", "Roten Flesh" , "Resume"};
+    int choice = 0;
+    while (1){
+        draw_menu_border();
+        mvprintw(1, 1, " ");
+        for (int i = 0; i < 5; ++i){
+            if (i == choice)
+                attron(A_REVERSE);
+            if(i == 0) mvprintw(35 + i, 158, "%d %s", g.normal_food , levels[i] );
+            if(i == 1) mvprintw(35 + i, 158, "%d %s", g.magic_food , levels[i] );
+            if(i == 2) mvprintw(35 + i, 158, "%d %s", g.quality_food , levels[i] );
+            if(i == 3) mvprintw(35 + i, 158, "%d %s", g.rotenflesh , levels[i] ); 
+            if(i == 4) mvprintw(35 + i, 158, "%s",levels[i] );           
+            if (i == choice)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP)
+            choice = (choice == 0) ? 4 : choice - 1;
+        else if (ch == KEY_DOWN)
+            choice = (choice == 4) ? 0 : choice + 1;
         else if (ch == 10)
             break;
     }
@@ -1025,18 +1251,16 @@ void food_menu(){
     case 0:
         if(g.normal_food > 0){
             elapsed -=10;
-            output_massages(7);
             if (elapsed < 0) elapsed = 0;
-            if (elapsed == 0){damage -= 10;
-            if (damage < 0)damage = 0;output_massages(8);} 
-            
+            if (damage < 0)damage = 0;
+            output_massages(7);
             g.normal_food -= 1;
         }
         break;
     case 1:
         if(g.magic_food > 0){
             elapsed -=12;
-            damage -= 7;
+            damage -= 3;
             if (elapsed < 0) elapsed = 0;
             if (elapsed == 0) damage -= 10;
             if (damage < 0) damage = 0;
@@ -1053,16 +1277,16 @@ void food_menu(){
         }
         break;
     case 3:
-        difficulty = 0;
-        break;
-    case 4:
-        difficulty = 2000000000;
+
+
+
         break;
     default:
         clear();
     }    
 //! ************anva ghaza ha be nesbat faz 2 kamel shavad*************************************** */
     timeout(40);
+    refresh();
 }
 
 void handle_movement(int ch, Pos *p ){
@@ -1074,6 +1298,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
+            output_massages(12);
         }
         if (map[l][p->y - g.speed][p->x].flags == 3 ){
             map[l][p->y - g.speed][p->x].signs = '?'; 
@@ -1105,6 +1330,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.y = y_1[l][3] + 3;
             g.player.x = x1[l][3] + 3;
             clear();
+            output_massages(11);
         }
         else if (map[l][p->y - g.speed][p->x].signs == 'm' ||
         map[l][p->y - g.speed][p->x].signs == 'a' ||
@@ -1112,6 +1338,8 @@ void handle_movement(int ch, Pos *p ){
          map[l][p->y - g.speed][p->x].signs == '#' ||
           map[l][p->y - g.speed][p->x].signs == '+' ||
           map[l][p->y - g.speed][p->x].signs == 'G'||
+          map[l][p->y - g.speed][p->x].signs == 'U'||
+          map[l][p->y - g.speed][p->x].signs == 'W'||         
           map[l][p->y - g.speed][p->x].signs == 'D')
             p->y -= g.speed;
         break;
@@ -1121,12 +1349,14 @@ void handle_movement(int ch, Pos *p ){
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
+            output_massages(12);
         }
         if (map[l][p->y + g.speed][p->x].signs == '>' ){
             l--;
             g.player.y = y_1[l][3] + 3;
             g.player.x = x1[l][3] + 3;
             clear();
+            output_massages(11);
         }
         else if (map[l][p->y + g.speed][p->x].signs == '.' ||
         map[l][p->y + g.speed][p->x].signs == 'a' ||
@@ -1134,6 +1364,8 @@ void handle_movement(int ch, Pos *p ){
          map[l][p->y + g.speed][p->x].signs == '#' ||
           map[l][p->y + g.speed][p->x].signs == '+' ||
           map[l][p->y + g.speed][p->x].signs == 'G'||
+          map[l][p->y + g.speed][p->x].signs == 'W'||
+          map[l][p->y + g.speed][p->x].signs == 'U'||
           map[l][p->y + g.speed][p->x].signs == 'D')
             p->y += g.speed;      
         break;
@@ -1143,12 +1375,14 @@ void handle_movement(int ch, Pos *p ){
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
+            output_massages(12);
         }
         if (map[l][p->y][p->x - g.speed].signs == '>' ){
             l--;
             g.player.y = y_1[l][3] + 3;
             g.player.x = x1[l][3] + 3;
             clear();
+            output_massages(11);
         }
         else if (map[l][p->y][p->x - g.speed].signs == 'm' ||
         map[l][p->y][p->x - g.speed].signs == 'a' ||
@@ -1156,6 +1390,9 @@ void handle_movement(int ch, Pos *p ){
          map[l][p->y][p->x - g.speed].signs == '#' ||
         map[l][p->y][p->x - g.speed].signs == '+' ||
         map[l][p->y][p->x - g.speed].signs == 'G' ||
+        map[l][p->y][p->x - g.speed].signs == 'U' ||
+        map[l][p->y][p->x - g.speed].signs == '?' ||
+        map[l][p->y][p->x - g.speed].signs == 'W' ||
         map[l][p->y][p->x - g.speed].signs == 'D' )
             p->x -= g.speed;
         break;
@@ -1165,20 +1402,26 @@ void handle_movement(int ch, Pos *p ){
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
+            output_massages(12);
         }
         if (map[l][p->y][p->x + g.speed].signs == '>' ){
             l--;
             g.player.y = y_1[l][3] + 3;
             g.player.x = x1[l][3] + 3;
             clear();
+            output_massages(11);
         }
-        else if (map[l][p->y][p->x + g.speed].signs == 'a' ||
+        else if (map[l][p->y][p->x + g.speed].signs == 'a'||
         map[l][p->y][p->x + g.speed].signs == 'm' ||
         map[l][p->y][p->x + g.speed].signs == '.' ||
          map[l][p->y][p->x + g.speed].signs == '#' ||
           map[l][p->y][p->x + g.speed].signs == '+' ||
           map[l][p->y][p->x + g.speed].signs == 'G' ||
-          map[l][p->y][p->x + g.speed].signs == 'D' )
+          map[l][p->y][p->x + g.speed].signs == 'D' ||
+          map[l][p->y][p->x + g.speed].signs == 'U' ||  
+          map[l][p->y][p->x + g.speed].signs == 'W' ||        
+          map[l][p->y][p->x + g.speed].layer == 80||
+        map[l][p->y][p->x + g.speed].signs == '?')
             p->x += g.speed;
         break;
     case '9':
@@ -1215,7 +1458,7 @@ void handle_movement(int ch, Pos *p ){
         break;
     case 'v':
         if (g.speed == 1){
-            g.speed = 3;
+            g.speed = 2;
         }
         else{
             g.speed = 1;
@@ -1229,24 +1472,49 @@ void handle_movement(int ch, Pos *p ){
         break;
     case 'm':
         timeout(-1);
-        for (int j = 1 ; j < 32 ; j++){
-            for (int i = 1 ; i < 183 ; i++){
+    for (int j = 2 ; j < 32 ; j++){
+        for (int i = 2 ; i < 184 ; i++){
                 if(map[l][j][i].signs == 'G'){
                     attron(COLOR_PAIR(3));
                     mvprintw( j , i , "%c" , map[l][j][i].signs);
                     attroff(COLOR_PAIR(3));
                     refresh();
                 }
+                else if(map[l][j][i].layer == 30 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(1));  
+                } 
+                else if(map[l][j][i].layer == 31 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(5));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(5));  
+                } 
+                else if(map[l][j][i].layer == 32 && map[l][j][i].signs == 'U'){
+                    attron(COLOR_PAIR(2));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(2));  
+                } 
+                else if(map[l][j][i].signs == 'a'){
+                    attron(COLOR_PAIR(6));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(6));  
+                } 
+                else if(map[l][j][i].signs == 'm'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    attroff(COLOR_PAIR(8));  
+                }   
                 else{
                     mvprintw( j , i , "%c" , map[l][j][i].signs);
-                }
+                }             
             }
         }
         getch();
         clear();
         timeout(40);  
         break;
-    case 'q':
+    case '0':
         set_final_values();
         add_to_score_board();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
@@ -1255,6 +1523,7 @@ void handle_movement(int ch, Pos *p ){
         int ch = getch();
         endwin();
         exit(0);
+        break;
     case 'p':
         switch (map[l][g.player.y][g.player.x].signs){
             case '.': '#';
@@ -1285,25 +1554,57 @@ void handle_movement(int ch, Pos *p ){
                 }
                 else output_massages(10);
                 break;
+            default:
+                break;
         }
+        switch (map[l][g.player.y][g.player.x].layer){ 
+            case 30:
+                map[l][g.player.y][g.player.x].signs = '.';
+                g.Health_potin += 1;  
+                output_massages(14);       
+                break;
+            case 31:
+                map[l][g.player.y][g.player.x].signs = '.';
+                g.Speed_potion += 1;            
+                output_massages(15);
+                break;
+            case 32:
+                map[l][g.player.y][g.player.x].signs = '.';
+                g.Damage_potion += 1;            
+                output_massages(16);
+                break;            
+            
+        }      
         break;
     case 'e':
-        timeout(-1);
         food_menu();
-        timeout(40);
+        break;
+    case 'r':
+        magic_menu();
+        break;
+    case 'q':
+        weapon_menu();
+        break;        
     default:
         break;
     }
+
     if(map[l][g.player.y][g.player.x].signs == '+' && map[l][g.player.y][g.player.x].flags == 1){
         output_massages(1);
     }
-    if(map[l][g.player.y][g.player.x].layer){
+
+    if(map[l][g.player.y][g.player.x].layer == 1){
         output_massages(6);
         damage += 7;
         map[l][g.player.y][g.player.x].signs ='^'; 
         map[l][g.player.y][g.player.x].layer = 0; 
     }
 
+    if(map[l][g.player.y][g.player.x].layer == 80){
+        output_massages(13);
+        map[l][g.player.y][g.player.x].signs ='?'; 
+        map[l][g.player.y][g.player.x].layer = 0; 
+    }
 }
 void clear_massages(){
         timer_1++;
@@ -1312,6 +1613,7 @@ void clear_massages(){
         output_massages(0);
     }
 }
+
 void output_massages(int massage){
     switch(massage){
         case 0:
@@ -1327,25 +1629,25 @@ void output_massages(int massage){
         case 2:
             output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Gold                   ");
-            mvprintw(37 , 2 , "Total Score : %d                        " , g.gold * 6);
+            mvprintw(37 , 2 , "Total Score: %d                        " , g.gold * 6);
             timer_1 = 0;
             break;
         case 3:
             output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Dark Gold              ");
-            mvprintw(37 , 2 , "Total Score : %d                        " , g.gold * 6);
+            mvprintw(37 , 2 , "Total Score: %d                        " , g.gold * 6);
             timer_1 = 0;
             break;
         case 4:
             output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Normal Food            ");
-            mvprintw(37 , 2 , "Total Normal Food : %d                  " , g.normal_food);
+            mvprintw(37 , 2 , "Total Normal Food: %d                  " , g.normal_food);
             timer_1 = 0;
             break;
         case 5:
             output_massages(0);
-            mvprintw(36 , 2 , "You've Picked up Dark Gold              ");
-            mvprintw(37 , 2 , "Total Magical Food : %d                 " , g.magic_food * 6);
+            mvprintw(36 , 2 , "You've Picked up Magical Food           ");
+            mvprintw(37 , 2 , "Total Magical Food: %d                 " , g.magic_food * 6);
             timer_1 = 0;
             break;
         case 6:
@@ -1362,11 +1664,13 @@ void output_massages(int massage){
             timer_1 = 0;
             break;  
         case 8:
-            output_massages(0);
-            mvprintw(36 , 2 , "Your Hunger is at max                   ");
-            mvprintw(37 , 2 , "You've gained 10 Heath                  ");            
-            mvprintw(38 , 2 , "Health: %d                              " , 100 - damage);
-            timer_1 = 0;
+            if(damage > 0){
+                output_massages(0);
+                mvprintw(36 , 2 , "Your Hunger is at max                   ");
+                mvprintw(37 , 2 , "You're being healed                     ");            
+                mvprintw(38 , 2 , "Health: %d                              " , 100 - damage);
+                timer_1 = 0;
+            }
             break;  
         case 9:
             output_massages(0);
@@ -1378,6 +1682,41 @@ void output_massages(int massage){
             mvprintw(36 , 2 , "Your Magical Food inventory is full     ");
             timer_1 = 0;
             break; 
+        case 11:
+            output_massages(0);
+            mvprintw(36 , 2 , "You are Back to the Last Floor          ");
+            mvprintw(37 , 2 , "Floor Number: %d                        " , l + 1);
+            timer_1 = 0;
+            break;
+        case 12:
+            output_massages(0);
+            mvprintw(36 , 2 , "You are in the Next Floor               ");
+            mvprintw(37 , 2 , "Floor Number: %d                        " , l + 1);
+            timer_1 = 0;
+            break;
+        case 13:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Found a Secret Room                 ");
+            timer_1 = 0;
+            break;
+        case 14:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Picked up Health Potion              ");
+            mvprintw(37 , 2 , "Total Health Potions: %d                            " , g.Health_potin);
+            timer_1 = 0;
+            break;
+        case 15:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Picked up Speed Potion           ");
+            mvprintw(37 , 2 , "Total Speed Potions: %d                  " , g.Speed_potion);
+            timer_1 = 0;
+            break;
+        case 16:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Picked up Damge Potion           ");
+            mvprintw(37 , 2 , "Total Damage Potions: %d                 " , g.Damage_potion);
+            timer_1 = 0;
+            break;
         default:
             break;
     }
@@ -1518,12 +1857,107 @@ void get_four_levels_rooms(){
     g.player.x = x1[0][0] + 5;
     get_hidden_rooms();
 }
+void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
+    int arrowss =rand()%4;
+    int magicwand = rand()%4;
+    int daggerr = rand()%4;
+    int pocketsword = rand()%4;
+    Pos arrowsss;
+    Pos magicwandd;
+    Pos daggerrr;
+    Pos pocketswordd;
+    switch(arrowss){
+    case 0 ... 2:
+        break;
+    case 3:
+        arrowsss.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        arrowsss.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        map[l][arrowsss.y][arrowsss.x].layer = 30;
+        map[l][arrowsss.y][arrowsss.x].signs = 'A';
+        break;
+    default:
+        break;
+    }
+    switch(magicwand){
+        case 0 ... 2:
+            break;
+        case 3:
+            magicwandd.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            magicwandd.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][magicwandd.y][magicwandd.x].layer = 31;
+            map[l][magicwandd.y][magicwandd.x].signs = 'L';
+            break;
+        default :
+            break;
+    }   
+    switch(daggerr){
+        case 0 ... 2:
+            break;
+        case 3:
+            daggerrr.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            daggerrr.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][daggerrr.y][daggerrr.x].layer = 32;
+            map[l][daggerrr.y][daggerrr.x].signs = 'J';
+            break;
+        default :
+            break;
+    }  
+    switch(pocketsword){
+        case 0 ... 2:
+            break;
+        case 3:
+            pocketswordd.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            pocketswordd.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][pocketswordd.y][pocketswordd.x].layer = 32;
+            map[l][pocketswordd.y][pocketswordd.x].signs = 'B';
+            break;
+        default :
+            break;
+    }  
+}
 void generage_potions_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
-
-
-
-
-    
+    int healthpotion =rand()%4;
+    int speedpotion = rand()%4;
+    int damagepotion = rand()%4;
+    Pos health_potion;
+    Pos speed_potion;
+    Pos damage_potion;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        health_potion.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        health_potion.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        map[l][health_potion.y][health_potion.x].layer = 30;
+        map[l][health_potion.y][health_potion.x].signs = 'U';
+        break;
+    default:
+        break;
+    }
+    switch(speedpotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            speed_potion.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            speed_potion.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][speed_potion.y][speed_potion.x].layer = 31;
+            map[l][speed_potion.y][speed_potion.x].signs = 'U';
+            break;
+        default :
+            break;
+    }   
+    switch(damagepotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            damage_potion.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            damage_potion.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][damage_potion.y][damage_potion.x].layer = 32;
+            map[l][damage_potion.y][damage_potion.x].signs = 'U';
+            break;
+        default :
+            break;
+    }  
 }
 void generage_traps_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     int chance =rand()%4;
@@ -1532,25 +1966,25 @@ void generage_traps_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     case 0 :
         break;
     case 1:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].layer = 1;
         break;
     case 2:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        gold_2.x = rand()%(x2 - x1 - 3) + x1 +2;
+        gold_2.y = rand()%(y2 - y_1 -3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].layer = 1;
         map[l][gold_2.y][gold_2.x].layer = 1;
         break;
     case 3:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_3.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_3.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        gold_2.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_2.y = rand()%(y2 - y_1 -3) + y_1 + 2;
+        gold_3.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_3.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].layer = 1;
         map[l][gold_2.y][gold_2.x].layer = 1;
         map[l][gold_3.y][gold_3.x].layer = 1;
@@ -1604,25 +2038,25 @@ void generage_gold_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
 
         break;
     case 2:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].signs = 'G';
         break;
     case 3:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        gold_2.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_2.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].signs = 'G';
         map[l][gold_2.y][gold_2.x].signs = 'G';
         break;
     case 4:
-        gold_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        gold_3.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        gold_3.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        gold_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        gold_2.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_2.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        gold_3.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        gold_3.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][gold_1.y][gold_1.x].signs = 'G';
         map[l][gold_2.y][gold_2.x].signs = 'G';
         map[l][gold_3.y][gold_3.x].signs = 'G';
@@ -1652,25 +2086,25 @@ void generage_food_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     case 0 ... 1:
         break;
     case 2:
-        food_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        food_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][food_1.y][food_1.x].signs = 'a';
         break;
     case 3:
-        food_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        food_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        food_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        food_2.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_2.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][food_1.y][food_1.x].signs = 'a';
         map[l][food_2.y][food_2.x].signs = 'a';
         break;
     case 4:
-        food_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        food_2.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_2.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        food_3.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        food_3.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        food_1.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_1.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        food_2.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_2.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
+        food_3.x = rand()%(x2 - x1 - 3) + x1 + 2;
+        food_3.y = rand()%(y2 - y_1 - 3) + y_1 + 2;
         map[l][food_1.y][food_1.x].signs = 'a';
         map[l][food_2.y][food_2.x].signs = 'a';
         map[l][food_3.y][food_3.x].signs = 'a';
@@ -1707,6 +2141,18 @@ void fill_the_map(){
                     }
                     if(r==0 && l!= 0){
                         map[l][y_1[l][r] + 2][x1[l][r] + 3].signs = '>';
+                    }
+                    if(r == 3 && l==3){
+                        map[l][y2[l][r] - 1][x1[l][r] + 2].signs = 'W';
+                         map[l][y2[l][r] - 2][x1[l][r] + 3].signs = 'G';
+                         map[l][y2[l][r] - 4][x1[l][r] + 4].signs = 'G';
+                         map[l][y2[l][r] - 5][x1[l][r] + 3].signs = 'G';
+                         map[l][y_1[l][r] + 2][x1[l][r] + 4].signs = 'G';
+                         map[l][y_1[l][r] + 1][x2[l][r] - 2].signs = 'G';
+                         map[l][y_1[l][r] + 2][x2[l][r] - 3].signs = 'G';
+                         map[l][y_1[l][r] + 1][x2[l][r] - 4].signs = 'G';
+                        map[l][y2[l][r] - 1][x1[l][r] + 4].signs = 'G';
+                         map[l][y2[l][r] - 1][x1[l][r] + 2].signs = 'G';                            
                     }
                 }
             }
@@ -1755,7 +2201,10 @@ void fill_the_map(){
             door_x2[l][6] = x1[l][7];
             door_y1[l][6] = (rand()%(y2[l][5]-y_1[l][5] - 3)) + y_1[l][5] + 2;
             door_y2[l][6] = (rand()%(y2[l][7]-y_1[l][7] - 3)) + y_1[l][7] + 2;
-            if (jj > 200000 || door_y1[l][6]-door_y2[l][6] > 4 || door_y2[l][6]-door_y1[l][6]>4) gg = 0;
+            if (jj > 200000 || door_y1[l][6]-door_y2[l][6] > 4 || door_y2[l][6]-door_y1[l][6]>4){
+                 gg = 0;
+                map[l][door_y1[l][6]][door_x1[l][6]].layer = 80;
+            }
             else jj++;
         }
     }
@@ -1880,10 +2329,19 @@ void fill_the_map(){
         }
     }
     for(int l = 0 ; l < 4 ; l++){
+        for (int ri = 0 ; ri < 184 ; ri++){ 
+            for (int rj = 0 ; rj < 45 ; rj++){      
+                if(map[l][rj][ri].layer == 80) map[l][rj][ri].signs = '|';
+            }
+        }
+    } 
+    for(int l = 0 ; l < 4 ; l++){
         for (int r = 0 ; r < 8 ; r++){     
         generage_gold_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l); 
         generage_food_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l); 
         generage_pillars_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l); 
+        generage_potions_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
+        generage_weapons_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
         }
     }   
 } 
@@ -2001,6 +2459,7 @@ void Check_winning_or_losing(){
     }
     if (map[l][g.player.y][g.player.x].signs == 'W'){
         timeout(-1);
+        g.games_finished += 1;
         set_final_values();
         add_to_score_board();
         back_ground_sky();
