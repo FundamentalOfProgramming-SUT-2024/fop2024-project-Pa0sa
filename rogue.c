@@ -118,6 +118,9 @@ void generage_gold_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_food_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_pillars_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_traps_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
+void generage_potions_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
+void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
+
 
 void fill_the_map();
 void handle_movement(int ch, Pos *p);
@@ -1267,14 +1270,20 @@ void handle_movement(int ch, Pos *p ){
                 output_massages(3);
                 break;
             case 'a':
-                map[l][g.player.y][g.player.x].signs = '.';
-                g.normal_food += 1;
-                output_massages(4);
+                if(g.normal_food < 5){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.normal_food += 1;
+                    output_massages(4);
+                }
+                else output_massages(9);
                 break;
             case 'm':
-                map[l][g.player.y][g.player.x].signs = '.';
-                g.magic_food += 1;
-                output_massages(4);
+                if(g.magic_food < 5){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.magic_food += 1;
+                    output_massages(4);
+                }
+                else output_massages(10);
                 break;
         }
         break;
@@ -1311,46 +1320,64 @@ void output_massages(int massage){
             mvprintw(38 , 2 , "                                        ");
             break;
         case 1:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Entered a new Room               ");
             timer_1 = 0;
             break;
         case 2:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Gold                   ");
             mvprintw(37 , 2 , "Total Score : %d                        " , g.gold * 6);
             timer_1 = 0;
             break;
         case 3:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Dark Gold              ");
             mvprintw(37 , 2 , "Total Score : %d                        " , g.gold * 6);
             timer_1 = 0;
             break;
         case 4:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Normal Food            ");
             mvprintw(37 , 2 , "Total Normal Food : %d                  " , g.normal_food);
             timer_1 = 0;
             break;
         case 5:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Dark Gold              ");
             mvprintw(37 , 2 , "Total Magical Food : %d                 " , g.magic_food * 6);
             timer_1 = 0;
             break;
         case 6:
+            output_massages(0);
             mvprintw(36 , 2 , "You've Stepped on a trap                ");
             mvprintw(37 , 2 , "Health: %d                              " , 100 - damage);
             timer_1 = 0;
             break;  
         case 7:
+            output_massages(0);
             mvprintw(36 , 2 , "You've eathen a Normal Food             ");
             mvprintw(37 , 2 , "And regained 10 Hunger                  ");
             mvprintw(38 , 2 , "Hunger: %d                              " , 100 - elapsed);
             timer_1 = 0;
             break;  
         case 8:
+            output_massages(0);
             mvprintw(36 , 2 , "Your Hunger is at max                   ");
-            mvprintw(37 , 2 , "You've gained 10 Heath                   ");            
+            mvprintw(37 , 2 , "You've gained 10 Heath                  ");            
             mvprintw(38 , 2 , "Health: %d                              " , 100 - damage);
             timer_1 = 0;
             break;  
+        case 9:
+            output_massages(0);
+            mvprintw(36 , 2 , "Your Normal Food inventory is full      ");
+            timer_1 = 0;
+            break; 
+        case 10:
+            output_massages(0);
+            mvprintw(36 , 2 , "Your Magical Food inventory is full     ");
+            timer_1 = 0;
+            break; 
         default:
             break;
     }
@@ -1491,7 +1518,13 @@ void get_four_levels_rooms(){
     g.player.x = x1[0][0] + 5;
     get_hidden_rooms();
 }
+void generage_potions_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
 
+
+
+
+    
+}
 void generage_traps_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     int chance =rand()%4;
     Pos gold_1 , gold_2 , gold_3;
