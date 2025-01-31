@@ -537,21 +537,27 @@ void get_user_password_from_loggin(Game *g,FILE *fptr){
     clear();
     draw_menu_border();
     echo();
-    mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your password or email: ");
+    mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your Password: ");
     getnstr(g->password, 50);
     noecho();
     while(check_user_password_from_loggin(g ,g->password)){
         clear();
         draw_menu_border();
         echo();
-        mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Password or email is not correct.");
-        mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your password or email: ");
+        mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Password is not correct.");
+        mvprintw(LINES / 2 , COLS / 2 - 15, "Enter F if you Forgot the Password");        
+        mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your Password: ");
+
         getnstr(g->password, 50);
         noecho();
     }
     noecho();
 }
 bool check_user_password_from_loggin(Game *g, char * password){
+    if (password == 'F'){
+    mvprintw(LINES / 2 - 1, COLS / 2 - 15, "                            ");
+    mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Enter your Email: ");    
+    }
     FILE *ifp;
     char filepath[1024];
     snprintf(filepath, sizeof(filepath), "%s/%s", g->name, g->name);
