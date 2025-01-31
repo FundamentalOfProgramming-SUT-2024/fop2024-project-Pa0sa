@@ -1,0 +1,3 @@
+Parsa 62 2 0
+Hello 51 2 1
+salam 41 22 1
