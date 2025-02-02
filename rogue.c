@@ -24,6 +24,11 @@ typedef struct{
     int hth;
     int dmg;
     int moveable;
+    int move_amount;
+    int one_at_a_time;
+    int moved_once;
+    int moved;
+    int kind;
 } Enemies;
 
 typedef struct{
@@ -36,10 +41,8 @@ typedef struct{
     int normal_food, magic_food , quality_food , rotenflesh;
     int Health_potin, Speed_potion , Damage_potion;   
     int magic_wand , arrows, dagger , sword , mace;
-    char range_weapon_name[50];
-    char melee_weapon_name[50];
-    int range_weapon;
-    int melee_weapon;
+    char hand_weapon_name[50];
+    int hand_weapon;
     time_t time_limit;
     time_t start_time;
     int speed ;
@@ -58,7 +61,9 @@ typedef struct{
     int health;
     int enemy;
     int count;
+    int win;
     Enemies mnst;
+    Enemies fire;
 } Map;
 
 typedef struct{
@@ -83,6 +88,7 @@ int elapsed = 0;
 int difficulty = 0;
 int hunger = 0;
 int damage = 0;
+int damageeee = 1;
 int healing = 0;
 int healing_speed = 1;
 int music_is_playing = 1;
@@ -96,8 +102,13 @@ Game g;
 int dim1 =0, dim2 =0;
 int dim3 =0, dim4=0;
 int dimmaster;
+int temp_range;
+int counter_potion_time = 0;
 int in_game = 1;
-
+int moster_flag=0,moster_counter=0;
+int giant_move_counter=0 , giant_step_counter = 0;
+int fire_breathing_step = 0;
+int set_playe_position = 1;
 char *coin="⎈";
 char *blackcoin="⛃";
 char *playerr= "☭";
@@ -174,16 +185,21 @@ void check_room_index();
 void food_menu();
 void magic_menu();
 void weapon_menu();
+void check_potion_time();
+void check_giant_move_time();
 
 void* playMusic(void* arg);
 void* welcomeplayMusic(void* arg);
 void* signinplayMusic(void* arg);
 void* menuplayMusic(void* arg);
 void check_what_to_play(int l);
+void check_what_to_stop(int l);
 
 void mosters_doing_damage();
 void mosters_moving_around();
-
+void unmovable_counter();
+void move_fire_breathing_moster();
+void treasure_layer();
 
 void Check_winning_or_losing();
 
@@ -200,8 +216,6 @@ int main(){
 
     srand(time(0));
 
-    get_four_levels_rooms();
-    fill_the_map();
 
     start_color();
     Set_colors();
@@ -227,7 +241,7 @@ int main(){
     get_player_info(&g);
     pthread_join(signinmusicThread, NULL);
 
-    get_innitial_values();
+    // get_innitial_values();
 
     while(menu_page(&g)){}
     g.start_time = time(NULL);
@@ -250,6 +264,7 @@ int main(){
         mosters_moving_around(ch);
         mosters_doing_damage();
 
+        move_fire_breathing_moster();
 
         refresh();
         clear_massages();
@@ -292,16 +307,18 @@ void welcome_panel(){
 }
 
 void get_innitial_values(){
-    strcpy(g.melee_weapon_name,"Mace");
-    g.melee_weapon = 0;
-    g.range_weapon = 0; 
+    strcpy(g.hand_weapon_name,"Mace");
+    g.hand_weapon = 4; 
     g.hunger = 100;
     g.speed = 1;
-    g.magic_wand=0 ;
-    g.arrows=0;
+    g.magic_wand=10 ;
+    g.arrows=10;
     g.dagger=0;
     g.sword=0;
     g.mace=1;
+    damage = 0;
+    damageeee = 1;
+    elapsed = 0;
     if(strcmp(g.name , "Guest") == 0){
         return;
     }
@@ -309,7 +326,7 @@ void get_innitial_values(){
     char filepath[150];
     snprintf(filepath, sizeof(filepath), "%s/%s", g.name, "scores");
     fpt = fopen(filepath,"r");
-    fscanf(fpt, "%d", &g.highest);
+    fscanf(fpt, "%d", &g.gold);
     fclose(fpt);
     snprintf(filepath, sizeof(filepath), "%s/%s", g.name, "started");
     fpt = fopen(filepath,"r");
@@ -391,6 +408,7 @@ void get_player_info(Game *g){
 }
 
 void draw_menu_border(){
+
     for (int x = 0; x < COLS; ++x)
     {
         mvprintw(0, x, "-");
@@ -690,7 +708,11 @@ int menu_page(Game *g){
         in_game = 0;
         menu = 0;
         menu_playing = 0;
-         pthread_join(menumusicThread, NULL);        
+         pthread_join(menumusicThread, NULL);  
+             get_four_levels_rooms();
+            fill_the_map();
+            treasure_layer();
+      
         clear();
         break;
     case 1:
@@ -724,6 +746,11 @@ int menu_page(Game *g){
         exit(0);
         break;
     }
+    if(l == 4 && set_playe_position){
+        g->player.x = COLS/2;
+        g->player.y = LINES/2;
+        set_playe_position = 0;
+    }
 
     return choice;
     clear();
@@ -734,7 +761,25 @@ void draw_rooms(){
     for (int j = 2 ; j < 32 ; j++){
         for (int i = 2 ; i < 184 ; i++){
             if(map[l][j][i].flags){
-                if(map[l][j][i].signs == 'a'){
+                if(map[l][j][i].mnst.sign == 'V'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "s");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                }   
+                else if(map[l][j][i].mnst.sign == 'N'){
+                    attron(COLOR_PAIR(7));
+                    mvprintw( j , i , "%s" , "D");
+                    attroff(COLOR_PAIR(7)); 
+                    refresh(); 
+                }    
+                else if(map[l][j][i].fire.sign == 'F'){
+                    attron(COLOR_PAIR(2));
+                    mvprintw( j , i , "%s" , "F");
+                    attroff(COLOR_PAIR(2)); 
+                    refresh(); 
+                }            
+                else if(map[l][j][i].signs == 'a'){
                     attron(COLOR_PAIR(1));
                     mvprintw( j , i , "%s" , apple);
                     attroff(COLOR_PAIR(1));
@@ -804,15 +849,11 @@ void draw_rooms(){
                     attroff(COLOR_PAIR(3)); 
                     refresh();                     
                 }   
-                else if(map[l][j][i].mnst.sign == 'V'){
-                    attron(COLOR_PAIR(2));
-                    mvprintw( j , i , "%s" , "G");
-                    attroff(COLOR_PAIR(2)); 
-                    refresh(); 
-                }                 
                 else{
                     mvprintw( j , i , "%c" , map[l][j][i].signs);
                 }             
+
+
             }
         }
     }
@@ -838,7 +879,7 @@ void show_user_profile(Game *g){
     mvprintw(7 , 18, "Name : %s", g->name);
     mvprintw(8 , 18, "Password : %s", g->password);
     mvprintw(9 , 18, "Eamil : %s", g->email);
-    mvprintw(10 , 18, "High score : %d", g->highest);
+    mvprintw(10 , 18, "High score : %d", g->gold);
     mvprintw(11 , 18, "Games played : %d", g->games_started);
     mvprintw(12 , 18, "Games won : %d", g->games_finished);
     getch();
@@ -991,13 +1032,13 @@ void add_to_score_board(){
             if(o == counter){
                 flag+=1;
                 strcpy(lead[o].name , g.name);
-                lead[o].score = g.highest;
+                lead[o].score = g.gold;
                 lead[o].games_started = g.games_started;
                 lead[o].games_finished = g.games_finished;
                 break;  
             }
             if(strcmp(lead[o].name , g.name)==0){
-                lead[o].score = g.highest;
+                lead[o].score = g.gold;
                 lead[o].games_started = g.games_started;
                 lead[o].games_finished = g.games_finished;
                 break;
@@ -1239,7 +1280,7 @@ void draw_player(Game g){
 void draw_hungerbar(){
     if (healing_speed == 2){
         if (healing%4 == 0){
-            damage -= 1;
+            damage -= 6;
             if (damage < 0) damage = 0;
             output_massages(20);
         }
@@ -1253,7 +1294,7 @@ void draw_hungerbar(){
     }
     if (elapsed == 0){
         if (healing%4 == 0){
-            damage -= 1;
+            damage -= 4;
             if (damage < 0) damage = 0;
             output_massages(8);
         }
@@ -1312,6 +1353,9 @@ void draw_hungerbar(){
     mvprintw(35, 93, "Hunger: %d ", remaining);
     mvprintw(35, 104, "[");
     mvprintw(35, 155, "]");
+
+
+    check_potion_time();
 }
 void draw_heathbar(){
     int remaining = 100 - damage;
@@ -1339,8 +1383,8 @@ void draw_food_count(){
     mvprintw(39, 93, "Quality Food: %d            ", g.quality_food);
     mvprintw(40, 93, "Normal Food: %d             ", g.normal_food);
     mvprintw(41, 93, "Roten Flesh: %d             ", g.rotenflesh);
-    mvprintw(42, 93, "Melee Weapon: %s            ", g.melee_weapon_name);  
-    mvprintw(43, 93, "Range Weapon: %s            ", g.range_weapon_name);
+    mvprintw(42, 93, "Hand Weapon: %s            ", g.hand_weapon_name);  
+
 }
 void weapon_menu(){
     const char *levels[] = {"Magic Wand","Arrows","Dagger","Mace","sword" , "Resume"};
@@ -1378,29 +1422,56 @@ void weapon_menu(){
 
     switch (choice){
     case 0:
-        g.range_weapon = 1;
-        strcpy(g.range_weapon_name , levels[choice]);
-        break;
+    if(g.hand_weapon == 0){
+        if(g.magic_wand > 0){
+            g.hand_weapon = 1;
+            strcpy(g.hand_weapon_name , levels[choice]);
+            output_massages(20);
+        }
+        else output_massages(20); 
+    }
+    else output_massages(20);
+            break;
     case 1:
-        g.range_weapon = 2;
-        strcpy(g.range_weapon_name , levels[choice]);
-        break;
+    if(g.hand_weapon == 0){
+        if(g.arrows > 0){
+            g.hand_weapon = 2;
+            strcpy(g.hand_weapon_name , levels[choice]);
+            output_massages(20);
+        }
+        else output_massages(20);
+    }
+    else output_massages(20);
+            break;
     case 2:
-        g.range_weapon = 3;
-        strcpy(g.range_weapon_name , levels[choice]);
-
+    if(g.hand_weapon == 0){
+        if(g.dagger > 0){
+            g.hand_weapon = 3;
+            strcpy(g.hand_weapon_name , levels[choice]);
+            output_massages(20);
+        }
+        else output_massages(20);
+    }
+    else output_massages(20);
 //! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
         break;
     case 3:
-        g.melee_weapon = 1;
-        strcpy(g.melee_weapon_name , levels[choice]);
-
+    if(g.hand_weapon == 0){
+        g.hand_weapon = 4;
+        strcpy(g.hand_weapon_name , levels[choice]);
+    }
+    else output_massages(20);
         break;
     case 4:
-        g.melee_weapon = 2;
-        strcpy(g.melee_weapon_name , levels[choice]);
-
-        break;
+    if(g.hand_weapon == 0){
+        if(g.sword == 1){
+            g.hand_weapon = 5;
+            strcpy(g.hand_weapon_name , levels[choice]);
+            output_massages(20);
+            }
+    }
+    else output_massages(20);
+            break;
     default:
         clear();
     }    
@@ -1443,13 +1514,14 @@ void magic_menu(){
     switch (choice){
     case 0:
         if(g.Health_potin > 0){
-            damage -= 1;
+            damage -= 5;
             if (damage < 0)damage = 0;
             on_potions = 1;
             healing_speed = 2;
             output_massages(17);
             g.Health_potin -= 1;
         }
+        else output_massages(20);
         break;
     case 1:
         if(g.Speed_potion > 0){
@@ -1458,12 +1530,17 @@ void magic_menu(){
             output_massages(18);
             g.Speed_potion -= 1;
         }
+        else output_massages(20);
         break;
     case 2:
         if(g.Damage_potion > 0){
 //! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
-
+            damageeee = 2;
+            on_potions = 1;
+            g.Damage_potion -= 1;
+            output_massages(20);
         }
+        else output_massages(20);
         break;
     case 3:
         difficulty = 0;
@@ -1473,6 +1550,30 @@ void magic_menu(){
     }    
 
     refresh();
+}
+void check_potion_time(){
+    if(on_potions){
+        counter_potion_time ++;
+        if(counter_potion_time == 10){
+            on_potions = 0;
+            g.speed = 1;
+            damageeee = 1;
+            healing_speed = 1;
+        }
+    }
+}
+void check_giant_move_time(){
+    if(giant_move_counter){
+        giant_step_counter++;
+        if(giant_step_counter == 7){
+            for(int i = 0 ; i<184 ; i++){
+                giant_move_counter = 0;
+                for(int j = 0 ; j<45 ; j++){
+                    map[l][j][i].mnst.moveable = 0;
+                }
+            }
+        }
+    }
 }
 void food_menu(){
     const char *levels[] = {"Normal", "Magical" ,"Quality", "Roten Flesh" , "Resume"};
@@ -1561,6 +1662,10 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][0] + 5;
             clear();
             output_massages(12);
+            if(l == 4){
+                g.player.x = COLS/2;
+                g.player.y = LINES/2;
+            }
         }
         if (map[l][p->y - g.speed][p->x].flags == 3 ){
             map[l][p->y - g.speed][p->x].signs = '?'; 
@@ -1616,6 +1721,10 @@ void handle_movement(int ch, Pos *p ){
             clear();
             output_massages(12);
                         check_what_to_play(l);
+            if(l == 4){
+                g.player.x = COLS/2;
+                g.player.y = LINES/2;
+            }
         }
         if (map[l][p->y + g.speed][p->x].signs == '>' ){
             l--;
@@ -1648,6 +1757,10 @@ void handle_movement(int ch, Pos *p ){
             clear();
             output_massages(12);
                         check_what_to_play(l);
+            if(l == 4){
+                g.player.x = COLS/2;
+                g.player.y = LINES/2;
+            }
         }
         if (map[l][p->y][p->x - g.speed].signs == '>' ){
             l--;
@@ -1684,6 +1797,10 @@ void handle_movement(int ch, Pos *p ){
             clear();
             output_massages(12);
                         check_what_to_play(l);
+            if(l == 4){
+                g.player.x = COLS/2;
+                g.player.y = LINES/2;
+            }
         }
         if (map[l][p->y][p->x + g.speed].signs == '>' ){
             l--;
@@ -1944,42 +2061,829 @@ void handle_movement(int ch, Pos *p ){
     case 'c':
 /***********************************************************************************************/
         break;
-    case ' ':
-        int cha = getch();
-        switch(cha){
-            case KEY_UP:
-            int range = 1;
-                for(range; range <= 4 ; range++){
-                    if(map[l][g.player.y-range][g.player.x].signs == '_' ||
-                    map[l][g.player.y-range][g.player.x].flags == 0){
-                        map[l][g.player.y-range+1][g.player.x].signs = 'J';  
-                        map[l][g.player.y-range + 1][g.player.x].count += 1;     
-                        break;
-                    }
-                    else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'){
-                        map[l][g.player.y-range][g.player.x].mnst.hth -= 12;
-                        output_massages_target(21 , range);     
-                        if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
-                            map[l][g.player.y-range][g.player.x].mnst.sign = '.';
-                            map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+    
 
+    case 'b':
+        g.hand_weapon = 0;
+        strcpy(g.hand_weapon_name ,"Empty");
+        break;  
+
+    case 'a':
+        if(g.hand_weapon == 0){
+            output_massages(20);
+        }
+        else if(g.hand_weapon == 4){
+            for (int j = -1 ; j <=1 ; j++){
+                for (int i = -1 ; i <= 1 ; i++){
+                    if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
+                        map[l][g.player.y+j][g.player.x+i].mnst.hth -= 5 * damageeee;
+                        if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
+                            map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
+                            map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            output_massages(20);     
+                        } 
+                    }                    
+                }
+            }
+        }
+        else if(g.hand_weapon == 5){           
+            for (int j = -1 ; j <=1 ; j++){
+                for (int i = -1 ; i <= 1 ; i++){
+                    if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
+                        map[l][g.player.y+j][g.player.x+i].mnst.hth -= 10 * damageeee;
+                        if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
+                            map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
+                            map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            output_massages(20);     
+                        } 
+                    }                    
+                }
+            }
+        }
+        else if(g.hand_weapon == 3){
+            if(g.dagger > 0){
+                g.dagger -= 1;
+
+                int range = 1;
+                int cha = temp_range;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range+1][g.player.x].signs = 'J';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;   
+                                }
+                                break;
+                            }
                         }
+                        if(range == 5) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'J';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'J';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'J';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'J';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'J';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'J';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'J';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }    
+                        break;
+                    default:
                         break;
                     }
                 }
-                if(range == 5) {
-                    map[l][g.player.y-range + 1][g.player.x].signs = 'J';
-                    map[l][g.player.y-range + 1][g.player.x].count += 1;               
-                }
-                // map[l][g.player.y-range][g.player.x].flags = 2;
-                break;
-            case KEY_DOWN:
-            case KEY_LEFT:
-            case KEY_RIGHT:    
+                else output_massages(20);
         }
-        break;      
-    default:
-        break;
+
+        else if(g.hand_weapon == 1){
+            if(g.magic_wand > 0){
+                g.magic_wand -=1;
+                int range = 1;
+                int cha = temp_range;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range + 1][g.player.x].signs = 'L';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'L';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'L';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'L';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'L';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'L';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'L';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;                                
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'L';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }    
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                else output_massages(20);
+            }
+        else if(g.hand_weapon == 2){
+            if(g.arrows > 0){
+                g.arrows -= 1;
+                int range = 1;
+                int cha = temp_range;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range+1][g.player.x].signs = 'A';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'A';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'A';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'A';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'A';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'A';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'A';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'A';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }  
+                        break;
+                    default:
+                        break;  
+                    }
+                }  
+                else{
+                    output_massages(20);
+                }
+         
+        }     
+            break; 
+
+    case ' ':
+        if(g.hand_weapon == 0){
+            output_massages(20);
+        }
+        else if(g.hand_weapon == 4){
+            for (int j = -1 ; j <=1 ; j++){
+                for (int i = -1 ; i <= 1 ; i++){
+                    if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
+                        map[l][g.player.y+j][g.player.x+i].mnst.hth -= 5 * damageeee;
+                        if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
+                            map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
+                            map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            output_massages(20);     
+                        } 
+                    }                    
+                }
+            }
+        }
+        else if(g.hand_weapon == 5){           
+            for (int j = -1 ; j <=1 ; j++){
+                for (int i = -1 ; i <= 1 ; i++){
+                    if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
+                        map[l][g.player.y+j][g.player.x+i].mnst.hth -= 10 * damageeee;
+                        if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
+                            map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
+                            map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
+                            map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
+                            output_massages(20);     
+                        } 
+                    }                    
+                }
+            }
+        }
+        else if(g.hand_weapon == 3){
+            if(g.dagger > 0){
+                g.dagger -= 1;
+                int cha = getch();
+                int range = 1;
+                temp_range = cha;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range+1][g.player.x].signs = 'J';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'J';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'J';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'J';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'J';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'J';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'J';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 12 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'J';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }    
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                else output_massages(20);
+        }
+
+        else if(g.hand_weapon == 1){
+            if(g.magic_wand > 0){
+                g.magic_wand -=1;
+                int cha = getch();
+                int range = 1;
+                temp_range = cha;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range + 1][g.player.x].signs = 'L';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'L';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'L';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'L';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'L';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'L';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 9 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'L';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 15 * damageeee;
+                                map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;                                
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 10) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'L';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }    
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            else output_massages(20);
+            }
+        else if(g.hand_weapon == 2){
+            if(g.arrows > 0){
+                g.arrows -= 1;
+                int cha = getch();
+                int range = 1;
+                temp_range = cha;
+                switch(cha){
+                    case KEY_UP:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                            map[l][g.player.y-range][g.player.x].flags == 0){
+                                map[l][g.player.y-range+1][g.player.x].signs = 'A';  
+                                map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                                map[l][g.player.y-range][g.player.x].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y-range + 1][g.player.x].signs = 'A';
+                            map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;
+                    case KEY_DOWN:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y+range][g.player.x].signs == '_' ||
+                            map[l][g.player.y+range][g.player.x].flags == 0){
+                                map[l][g.player.y+range - 1][g.player.x].signs = 'A';  
+                                map[l][g.player.y+range - 1][g.player.x].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                                map[l][g.player.y+range][g.player.x].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
+                                    map[l][g.player.y+range][g.player.x].mnst.sign = '.';
+                                    map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y+range - 1][g.player.x].signs = 'A';
+                            map[l][g.player.y+range - 1][g.player.x].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break;            
+                    case KEY_RIGHT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x+range].signs == '|' ||
+                            map[l][g.player.y][g.player.x+range].flags == 0){
+                                map[l][g.player.y][g.player.x+range - 1].signs = 'A';  
+                                map[l][g.player.y][g.player.x+range - 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x+range].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x+range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x+range - 1].signs = 'A';
+                            map[l][g.player.y][g.player.x+range - 1].count += 1;               
+                        }
+                        // map[l][g.player.y-range][g.player.x].flags = 2;
+                        break; 
+                    case KEY_LEFT:
+                        for(range; range <= 4 ; range++){
+                            if(map[l][g.player.y][g.player.x-range].signs == '|' ||
+                            map[l][g.player.y][g.player.x-range].flags == 0){
+                                map[l][g.player.y][g.player.x-range + 1].signs = 'A';  
+                                map[l][g.player.y][g.player.x-range + 1].count += 1;     
+                                break;
+                            }
+                            else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                                map[l][g.player.y][g.player.x-range].mnst.hth -= 5 * damageeee;
+                                output_massages_target(21 , range);     
+                                if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
+                                    map[l][g.player.y][g.player.x-range].mnst.sign = '.';
+                                    map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                }
+                                break;
+                            }
+                        }
+                        if(range == 5) {
+                            map[l][g.player.y][g.player.x-range + 1].signs = 'A';
+                            map[l][g.player.y][g.player.x-range + 1].count += 1;               
+                        }  
+                        break;
+                    default:
+                        break;  
+                    }
+                }  
+                else{
+                    output_massages(20);
+                }
+         
+        }     
+            break; 
+
+        default:
+            break;
     }
 
     if(map[l][g.player.y][g.player.x].signs == '+' && map[l][g.player.y][g.player.x].flags == 1){
@@ -1998,6 +2902,7 @@ void handle_movement(int ch, Pos *p ){
         map[l][g.player.y][g.player.x].signs ='?'; 
         map[l][g.player.y][g.player.x].layer = 0; 
     }
+
 }
 void clear_massages(){
         timer_1++;
@@ -2195,7 +3100,7 @@ void* thirdfloorplayMusic(void* arg){
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     
     // Load the music file
-    Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+    Mix_Music* Second_floor_music = Mix_LoadMUS("3_floor.mp3");
     Mix_PlayMusic(Second_floor_music,-1);
     while(Second_floor) {}
     Mix_FreeMusic(Second_floor_music);
@@ -2206,7 +3111,7 @@ void* forthfloorplayMusic(void* arg){
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     
     // Load the music file
-    Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+    Mix_Music* Second_floor_music = Mix_LoadMUS("4_floor.mp3");
     Mix_PlayMusic(Second_floor_music,-1);
     while(Second_floor) {}
     Mix_FreeMusic(Second_floor_music);
@@ -2244,6 +3149,45 @@ void check_what_to_play(int l){
             //Forth_floor = 1;
             //if(menu_playing == 0){
                 pthread_create(&floormusicThread, NULL, forthfloorplayMusic, NULL);    
+                //Forth_floor_playing = 1; 
+            //}
+                        break;
+        default:
+            break;
+    }
+}
+void check_what_to_stop_down(int l){
+    First_floor_playing=0;
+    Second_floor_playing=0;
+    Third_floor_playing=0;
+    Forth_floor_playing=0;
+    pthread_t floormusicThread;
+    switch(l){
+        case 0:
+            // First_floor = 1;
+            // if(menu_playing == 0){
+                pthread_join(floormusicThread, NULL);    
+            //     First_floor_playing = 1; 
+            // }
+            break;
+        case 1:
+            // Second_floor = 1;
+            // if(menu_playing == 0){
+                pthread_join(floormusicThread, NULL);    
+               // Second_floor_playing = 1; 
+            //}
+                        break;
+        case 2:
+            //Third_floor = 1;
+            //if(menu_playing == 0){
+                pthread_join(floormusicThread, NULL);    
+                //Third_floor_playing = 1; 
+            //}
+                        break;
+        case 3:
+            //Forth_floor = 1;
+            //if(menu_playing == 0){
+                pthread_join(floormusicThread, NULL);    
                 //Forth_floor_playing = 1; 
             //}
                         break;
@@ -2309,10 +3253,10 @@ char background[10][200][200]=
 }    
 
 void get_four_levels_rooms(){
-
+    get_innitial_values();
     for (int l = 0 ; l < 4 ; l++){
-        for (int j = 0 ; j < 34 ; j++){
-            for (int i = 0 ; i < 132 ; i++){
+        for (int j = 0 ; j < 45 ; j++){
+            for (int i = 0 ; i < 184 ; i++){
                 map[l][j][i].signs = ' ';
                 map[l][j][i].flags = 0;
                 map[l][j][i].layer = 0;
@@ -2346,7 +3290,7 @@ void get_four_levels_rooms(){
                 x2[l][h] = ((rand()% 40)+2) + (y * 43);
                 y_1[l][h] = ((rand()% 13)+2) + (x * 16);
                 y2[l][h] = ((rand()% 13)+2) + (x * 16);
-                if((x2[l][h] - x1[l][h]) > 8 &&( y2[l][h] - y_1[l][h]) > 6){
+                if((x2[l][h] - x1[l][h]) > 12 &&( y2[l][h] - y_1[l][h]) > 10){
                     y++;
                     if (y == 3){
                         y = 0;
@@ -2651,7 +3595,6 @@ void fill_the_map(){
                         map[l][y_1[l][r] + 2][x1[l][r] + 3].signs = '>';
                     }
                     if(r == 3 && l==3){
-                        map[l][y2[l][r] - 1][x1[l][r] + 2].signs = 'W';
                          map[l][y2[l][r] - 2][x1[l][r] + 3].signs = 'G';
                          map[l][y2[l][r] - 4][x1[l][r] + 4].signs = 'G';
                          map[l][y2[l][r] - 5][x1[l][r] + 3].signs = 'G';
@@ -2857,6 +3800,7 @@ void fill_the_map(){
             if(r==0 && l!= 0){
                 map[l][y_1[l][r] + 2][x1[l][r] + 3].signs = '>';
             }
+            map[3][y2[3][3] - 1][x1[3][3] + 2].signs = '<';
         }
     }   
 } 
@@ -2904,16 +3848,35 @@ void check_room_index(){
             for (int i = x1[l][0] ; i <= x2[l][0] ; i++){
                 for (int j = y_1[l][0] ; j <= y2[l][0] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){
+                        moster_flag = 1;
+                         if(map[l][j][i].mnst.sign == 'V'){
+                            giant_move_counter = 1;
+                            if(map[l][j][i].mnst.moved_once == 0){
+                                map[l][j][i].mnst.moved_once = 1;
+                                map[l][j][i].mnst.moveable = 1;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (map[l][g.player.y][g.player.x].signs == '+' || map[l][g.player.y][g.player.x].signs == '.'){
+    if (map[l][g.player.y][g.player.x].signs == '+' ||
+     map[l][g.player.y][g.player.x].signs == '.'){
         if (g.player.y > 0 && g.player.y <= 15 && g.player.x > 43 && g.player.x <= 86){
             for (int i = x1[l][1] ; i <= x2[l][1] ; i++){
                 for (int j = y_1[l][1] ; j <= y2[l][1] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter = 1;
+                        map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;
+                        }
+                        }
+                    }
                 }
             }
         }
@@ -2922,6 +3885,12 @@ void check_room_index(){
                 for (int j = y_1[l][2] ; j <= y2[l][2] ; j++){
                     map[l][j][i].flags = 2;
                     map[l][y_1[l][2]][x1[l][2]+ 4].flags = 3;  
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
@@ -2929,6 +3898,12 @@ void check_room_index(){
             for (int i = x1[l][5] ; i <= x2[l][5] ; i++){
                 for (int j = y_1[l][5] ; j <= y2[l][5] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
@@ -2936,6 +3911,12 @@ void check_room_index(){
             for (int i = x1[l][4] ; i <= x2[l][4] ; i++){
                 for (int j = y_1[l][4] ; j <= y2[l][4] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
@@ -2943,6 +3924,12 @@ void check_room_index(){
             for (int i = x1[l][3] ; i <= x2[l][3] ; i++){
                 for (int j = y_1[l][3] ; j <= y2[l][3] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
@@ -2950,6 +3937,12 @@ void check_room_index(){
             for (int i = x1[l][6] ; i <= x2[l][6] ; i++){
                 for (int j = y_1[l][6] ; j <= y2[l][6] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
@@ -2957,15 +3950,31 @@ void check_room_index(){
             for (int i = x1[l][7] ; i <= x2[l][7] ; i++){
                 for (int j = y_1[l][7] ; j <= y2[l][7] ; j++){
                     map[l][j][i].flags = 2;
+                    if(map[l][j][i].mnst.exist){moster_flag = 1;
+                    if(map[l][j][i].mnst.sign == 'V'){
+                    if(map[l][j][i].mnst.moved_once == 0){
+                    giant_move_counter=1;
+                    map[l][j][i].mnst.moveable = 1; map[l][j][i].mnst.moved_once = 1;}}
+                    }
                 }
             }
         }
     }
+        // if(moster_flag){
+        //     moster_counter += 1;
+        //     if(moster_counter == 5){
+        //         moster_flag = 0;
+        //         for(int i = 0 ; i < 184 ; i++){
+        //             for(int j = 0 ; j < 45 ; j++){
+        //                 map[l][j][i].mnst.moveable = 0;
+        //             }
+        //         }
+        //     }
+        // }
 }
 
 void Check_winning_or_losing(){
     if(damage >= 100){
-        timeout(-1);
         clear();
         set_final_values();
         add_to_score_board();
@@ -2974,11 +3983,12 @@ void Check_winning_or_losing(){
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "              Game Over            ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
+        refresh();
+        refresh();
         in_game = 1;
         int ch = getch();
     }
     if (map[l][g.player.y][g.player.x].signs == 'W'){
-        timeout(-1);
         g.games_finished += 1;
         set_final_values();
         add_to_score_board();
@@ -2987,6 +3997,8 @@ void Check_winning_or_losing(){
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "               You Won             ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
+        refresh();
+        refresh();
         int ch = getch();
         in_game = 1;
     }
@@ -2994,124 +4006,103 @@ void Check_winning_or_losing(){
 
 
 void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
-    
-    //  deamon
 
-    Pos deamon;
-    int healthpotion = 3;
-    switch(healthpotion){
-    case 0 ... 2:
-        break;
-    case 3:
-        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].mnst.sign = 'V';
-        map[l][deamon.y][deamon.x].mnst.hth = 30;
-        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[l][deamon.y][deamon.x].mnst.exist = 1;
-        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
-        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
-        break;
-    default:
-        break;
-    }
-    //  deamon
+    //Deamon
+    int num = rand()%4;
+    for (int u = 0 ; u < num ; u++){
+        Pos deamon;
+        int healthpotion = 3;
+        switch(healthpotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
 
-    Pos deamon;
-    int healthpotion = 3;
-    switch(healthpotion){
-    case 0 ... 2:
-        break;
-    case 3:
-        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].mnst.sign = 'V';
-        map[l][deamon.y][deamon.x].mnst.hth = 30;
-        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[l][deamon.y][deamon.x].mnst.exist = 1;
-        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
-        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
-        break;
-    default:
-        break;
-    }
-    //  deamon
+            map[l][deamon.y][deamon.x].mnst.sign = 'N';
+            map[l][deamon.y][deamon.x].mnst.hth = 5;
+            map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+            map[l][deamon.y][deamon.x].mnst.exist = 1;
+            map[l][deamon.y][deamon.x].mnst.moveable = 0;         
+            map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+            map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;    
+            break;
 
-    Pos deamon;
-    int healthpotion = 3;
-    switch(healthpotion){
-    case 0 ... 2:
-        break;
-    case 3:
-        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].mnst.sign = 'V';
-        map[l][deamon.y][deamon.x].mnst.hth = 30;
-        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[l][deamon.y][deamon.x].mnst.exist = 1;
-        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
-        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
-        break;
-    default:
-        break;
-    }
-    //  deamon
+        default:
+            break;
+        }    
+    }    
+   
+    //Fire monster
+    for(int y = 0 ; y <= 1; y++){
+        num = rand()%4;
+        for (int u = 0 ; u < num ; u++){
+            Pos fire;
+            int healthpotion = 3;
+            switch(healthpotion){
+            case 0 ... 2:
+                break;
+            case 3:
+                fire.x = rand()%(x2 - x1 - 5) + x1 + 4;
+                fire.y = rand()%(y2 - y_1 - 5) + y_1 + 3;
 
-    Pos deamon;
-    int healthpotion = 3;
-    switch(healthpotion){
-    case 0 ... 2:
-        break;
-    case 3:
-        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].mnst.sign = 'V';
-        map[l][deamon.y][deamon.x].mnst.hth = 30;
-        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[l][deamon.y][deamon.x].mnst.exist = 1;
-        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
-        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
-        break;
-    default:
-        break;
-    }
-    //  deamon
+                map[l][fire.y][fire.x].fire.sign = 'F';
+                map[l][fire.y][fire.x].fire.hth = 10;
+                map[l][fire.y][fire.x].fire.dmg = 5; 
+                map[l][fire.y][fire.x].fire.exist = 1;
+                map[l][fire.y][fire.x].fire.moveable = 0;  
+                map[l][fire.y][fire.x].fire.kind = 2;        
+                map[l][fire.y][fire.x].fire.loc.x =  fire.x ;  
+                map[l][fire.y][fire.x].fire.loc.y =  fire.y ;    
+                break;
 
-    Pos deamon;
-    int healthpotion = 3;
-    switch(healthpotion){
-    case 0 ... 2:
-        break;
-    case 3:
-        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
-        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].mnst.sign = 'V';
-        map[l][deamon.y][deamon.x].mnst.hth = 30;
-        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[l][deamon.y][deamon.x].mnst.exist = 1;
-        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
-        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
-        break;
-    default:
-        break;
+            default:
+                break;
+            }    
+        }   
     }
+
+
+    //  Snakk
+if( x1 > 0 && x1 < 40 && y_1 > 0 && y_1 < 15){
+        Pos Giant;
+        int healthpotion = 3;
+        switch(healthpotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            Giant.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            Giant.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][Giant.y][Giant.x].mnst.sign = 'V';
+            map[l][Giant.y][Giant.x].mnst.hth = 20;
+            map[l][Giant.y][Giant.x].mnst.dmg = 5; 
+            map[l][Giant.y][Giant.x].mnst.exist = 1;
+            map[l][Giant.y][Giant.x].mnst.moveable = 0;         
+            map[l][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
+            map[l][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
+            break;
+        default:
+            break;
+        }
+    }
+
 }
 void mosters_moving_around(int ch){
     int moved = 1;
     Enemies temp;
-    for (int ri = 0 ; ri < 44 ; ri++){
-        if(moved){
-            for (int rj = 0 ; rj < 15 ; rj++){
+    int how_many_mosters = 0;
+    int which_moster_x[45];
+    int which_moster_y[45];
+    int rj;
+    int ri;
+    for (int ri = 0 ; ri < 184 ; ri++){
+        for (int rj = 0 ; rj < 45 ; rj++){
+            if(map[l][rj][ri].mnst.moveable){
+                which_moster_y[how_many_mosters] = rj;
+                which_moster_x[how_many_mosters] = ri;
+                how_many_mosters += 1;
+            }
+            if(moved){
                 if(map[l][rj][ri].mnst.moveable){
                     if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
@@ -3127,7 +4118,7 @@ void mosters_moving_around(int ch){
                                 break;
                             } 
                     }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                    if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
                         (rj + 1 != g.player.y || ri + 1 != g.player.x)){
                         if(1){
@@ -3170,12 +4161,121 @@ void mosters_moving_around(int ch){
                             break;
                         } 
                     }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                        (ri + 1 != g.player.x)){
+                            if(1){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj][ri + 1].mnst;
+                                map[l][rj][ri + 1].mnst = temp;
+
+                                map[l][rj][ri + 1].mnst.loc.x = ri + 1;
+                                moved = 0;
+                                break;
+                            } 
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                        (ri - 1 != g.player.x)){
+                        if(1){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj][ri - 1].mnst;
+                            map[l][rj][ri - 1].mnst = temp;
+
+                            map[l][rj][ri - 1].mnst.loc.x = ri - 1;
+                            moved = 0;
+                            break;
+                        } 
+
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                        (rj + 1 != g.player.y)){
+                        if(1){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj + 1][ri].mnst;
+                            map[l][rj + 1][ri].mnst = temp;
+
+                            map[l][rj + 1][ri].mnst.loc.y = rj + 1;
+                            moved = 0;
+                            break;
+                        }
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                        (rj - 1 != g.player.y)){
+                        if(1){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj - 1][ri].mnst;
+                            map[l][rj - 1][ri].mnst = temp;
+
+                            map[l][rj - 1][ri].mnst.loc.y = rj - 1;
+                            moved = 0;
+                            break;
+                        } 
+                    }
                 }
-            }            
+            }
         }
     }
 }
+void move_fire_breathing_moster(){
+    fire_breathing_step++;
+    Enemies temp;
+    for(int rj=0 ; rj<45 ; rj++){
+        for(int ri=0 ; ri<184;ri++){
+            if(map[l][rj][ri].fire.kind == 2){
+                if(fire_breathing_step == 2 || fire_breathing_step == 1){
+                    temp = map[l][rj][ri].fire;
+                    map[l][rj][ri].fire = map[l][rj][ri + 1].fire;
+                    map[l][rj][ri + 1].fire = temp;  
+                    map[l][rj][ri + 1].fire.loc.x = ri - 1;
+                    
+                }             
+            }
+        }
+    }
+    for(int ri=184 ; ri>0;ri--){
+        for(int rj=45 ; rj>0 ; rj--){
+            if(map[l][rj][ri].fire.kind == 2){
+                if(fire_breathing_step == 3 || fire_breathing_step == 4){
+                    temp = map[l][rj][ri].fire;
+                    map[l][rj][ri].fire = map[l][rj + 1][ri].fire;
+                    map[l][rj + 1][ri].fire = temp;  
+                    map[l][rj + 1][ri].fire.loc.y = rj - 1;
+                    
+                }             
+            }
+        }
+    }
+    for(int rj=0 ; rj<45 ; rj++){
+        for(int ri=184 ; ri>0;ri--){
+            if(map[l][rj][ri].fire.kind == 2){
+                if(fire_breathing_step == 5 || fire_breathing_step == 6){
+                    temp = map[l][rj][ri].fire;
+                    map[l][rj][ri].fire = map[l][rj][ri - 1].fire;
+                    map[l][rj][ri - 1].fire = temp;  
+                    map[l][rj][ri - 1].fire.loc.x = ri + 1;
+                    
+                }             
+            }
+        }
+    }
+    for(int ri=0 ; ri<184;ri++){
+        for(int rj=0 ; rj<45 ; rj++){
+            if(map[l][rj][ri].fire.kind == 2){
+                if(fire_breathing_step == 7 || fire_breathing_step == 8){
+                    temp = map[l][rj][ri].fire;
+                    map[l][rj][ri].fire = map[l][rj - 1][ri].fire;
+                    map[l][rj - 1][ri].fire = temp;  
+                    map[l][rj - 1][ri].fire.loc.y = rj + 1;
+                }             
+            }
+        }
+    }
+    if(fire_breathing_step == 8) fire_breathing_step = 0;
 
+}
 void mosters_doing_damage(){
     for (int ri = 0 ; ri < 184 ; ri++){
         for (int rj = 0 ; rj < 45 ; rj++){
@@ -3214,7 +4314,151 @@ void mosters_doing_damage(){
                         damage += map[l][rj][ri].mnst.dmg;
                     }
                 }
+                if(map[l][rj][ri].mnst.sign == 'N'){
+                    if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
+                        damage += map[l][rj][ri].mnst.dmg;
+                    }
+                }
+                if(map[l][rj][ri].fire.sign == 'F'){
+                    if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == 0){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
+                        damage += map[l][rj][ri].fire.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].fire.loc.x == 0){
+                        damage += map[l][rj][ri].fire.dmg;
+                    }
+                }
             }
         }
     }
+}
+
+void treasure_layer(){
+    for (int i = 60 ; i <= 120 ;i ++){
+        for (int j = 0 ; j < 26 ; j++ ){
+            map[4][j][i].signs = '.';
+            if (j == 2 || j == 25){
+             map[4][j][i].signs = '_';
+            }
+            if((i == 60 || i == 120)&&j!=2){
+            map[4][j][i].signs = '|';
+            }
+             map[4][j][i].flags = 1;           
+        }
+    }
+    //Deamon
+    int num = (rand()%24)+14;
+    for (int u = 0 ; u < num ; u++){
+    Pos deamon;
+        deamon.x = rand()%(120 - 60 - 1) + 60 + 1;
+        deamon.y = rand()%(26 - 5) +   3 ;
+        map[4][deamon.y][deamon.x].mnst.sign = 'N';
+        map[4][deamon.y][deamon.x].mnst.hth = 5;
+        map[4][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[4][deamon.y][deamon.x].mnst.exist = 1;
+        map[4][deamon.y][deamon.x].mnst.moveable = 0;         
+        map[4][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[4][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;    
+    for (int i = 0 ; i < 2 ; i++){
+    Pos trap_1 , trap_2 , trap_3;
+        trap_1.x = rand()%(120 - 60 - 1) + 60 + 1;
+        trap_1.y = rand()%(26 - 2 - 1) +   3 ;
+        trap_2.x = rand()%(120 - 60 - 1) + 60 + 1;
+        trap_2.y =rand()%(26 - 2 - 1) +   3  ;
+        trap_3.x = rand()%(120 - 60 - 1) + 60 + 1;
+        trap_3.y = rand()%(26 - 2 - 1) +   3 ;
+        map[4][trap_1.y][trap_1.x].layer = 1;
+        map[4][trap_2.y][trap_2.x].layer = 1;
+        map[4][trap_3.y][trap_3.x].layer = 1;
+    }
+    Pos gold_1 , gold_2 , gold_3;
+    Pos darkgold_1;
+        gold_1.x = rand()%(120 - 60 - 1) + 60 + 1;
+        gold_1.y =rand()%(26 - 2 - 1) +   3 ;
+        gold_2.x =rand()%(120 - 60 - 1) + 60 + 1;
+        gold_2.y = rand()%(26 - 2 - 1) +   3 ;
+        gold_3.x = rand()%(120 - 60 - 1) + 60 + 1;
+        gold_3.y = rand()%(26 - 2 - 1) +   3 ;
+        map[4][gold_1.y][gold_1.x].signs = 'G';
+        map[4][gold_2.y][gold_2.x].signs = 'G';
+        map[4][gold_3.y][gold_3.x].signs = 'G';
+        darkgold_1.x =rand()%(120 - 60 - 1) + 60 + 1;
+        darkgold_1.y =rand()%(26 - 2 - 1) +   3 ;
+        map[l][darkgold_1.y][darkgold_1.x].signs = 'D';    
+    }
+    for (int i = 60 ; i <= 120 ;i ++){
+        for (int j = 0 ; j < 26 ; j++ ){
+            if (j == 2 || j == 25){
+             map[4][j][i].signs = '_';
+            }
+            if((i == 60 || i == 120)&&j!=2){
+            map[4][j][i].signs = '|';
+            }
+        }
+    }
+    Pos win;
+    win.x = rand()%(120 - 60 - 1) + 60 + 1;
+    win.y =rand()%(26 - 2 - 1) +   3 ;
+        map[4][win.y][win.x].signs = 'W';
+        map[4][win.y][win.x].mnst.sign = 'W';
+        map[4][win.y][win.x].mnst.hth = 0;
+        map[4][win.y][win.x].mnst.dmg = 0; 
+        map[4][win.y][win.x].mnst.exist = 0;
+        map[4][win.y][win.x].mnst.moveable = 0;         
+        map[4][win.y][win.x].mnst.loc.x =  win.x ;  
+        map[4][win.y][win.x].mnst.loc.y =  win.y ;  
 }
