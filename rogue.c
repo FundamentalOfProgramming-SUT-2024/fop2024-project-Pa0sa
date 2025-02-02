@@ -27,8 +27,10 @@ typedef struct{
     int normal_food, magic_food , quality_food , rotenflesh;
     int Health_potin, Speed_potion , Damage_potion;   
     int magic_wand , arrows, dagger , sword , mace;
-    char weapon_name[50];
-    int weapon;
+    char range_weapon_name[50];
+    char melee_weapon_name[50];
+    int range_weapon;
+    int melee_weapon;
     time_t time_limit;
     time_t start_time;
     int speed ;
@@ -44,6 +46,9 @@ typedef struct{
     char signs;
     int flags;
     int layer;
+    int health;
+    int enemy;
+    int count;
 } Map;
 
 typedef struct{
@@ -54,9 +59,13 @@ typedef struct{
 } Leaderboard;
 
 int l = 0;
-int menu = 1;
+int menu = 1 , menu_playing=0;
 int welcome = 1;
-int First_floor = 1;
+int signin = 1;
+int First_floor = 1,First_floor_playing=0;
+int Second_floor = 1,Second_floor_playing=0;
+int Third_floor = 1,Third_floor_playing=0;
+int Forth_floor = 1,Forth_floor_playing=0;
 int GAME_STATUS = 1;
 int timer_1 = 0;
 int timer_2 = 0;
@@ -66,6 +75,7 @@ int hunger = 0;
 int damage = 0;
 int healing = 0;
 int healing_speed = 1;
+int music_is_playing = 1;
 int on_potions = 0;
 int x1[6][10];
 int y_1[6][10];
@@ -73,7 +83,22 @@ int x2[6][10];
 int y2[6][10];
 Map map[6][50][184];
 Game g;
+int dim1 =0, dim2 =0;
+int dim3 =0, dim4=0;
+int dimmaster;
+int in_game = 1;
 
+char *coin="⎈";
+char *blackcoin="⛃";
+char *playerr= "☭";
+char *arroww="➳";
+char *daggerr="🗡";
+char *swordd="⚔";
+char *wandd="⚚";
+char *foodd="⛾";
+char *potionn="⚱";
+char *flag = "🏲";
+char *apple = "♡";
 
 void welcome_panel();
 void draw_menu_border();
@@ -109,13 +134,12 @@ void show_options_menu(Game *g);
 void Set_game_difficulty();
 void Set_colors();
 int Set_player_color();
-void Set_game_music(Game *g);
+void Set_game_music();
 
 void create_a_new_game();
 
 void draw_hungerbar();
 void draw_heathbar();
-void draw_gold_count();
 void draw_food_count();
 void clear_massages();
 
@@ -127,7 +151,7 @@ void generage_pillars_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_traps_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_potions_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
-
+void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 
 void fill_the_map();
 void handle_movement(int ch, Pos *p);
@@ -141,6 +165,10 @@ void magic_menu();
 void weapon_menu();
 
 void* playMusic(void* arg);
+void* welcomeplayMusic(void* arg);
+void* signinplayMusic(void* arg);
+void* menuplayMusic(void* arg);
+void check_what_to_play(int l);
 
 void Check_winning_or_losing();
 
@@ -149,7 +177,8 @@ void Check_winning_or_losing();
 int main(){
 
     pthread_t musicThread;
-    pthread_create(&musicThread, NULL, playMusic, NULL);    
+    pthread_t welcomemusicThread;
+    pthread_t signinmusicThread;
     setlocale(LC_ALL, "");
 
     initscr();
@@ -169,27 +198,36 @@ int main(){
 
 
 
+    pthread_create(&welcomemusicThread, NULL, welcomeplayMusic, NULL);    
     welcome_panel();
+    pthread_join(welcomemusicThread, NULL);
+ 
+    // pthread_create(&musicThread, NULL, playMusic, NULL);   
+    // menu = 0;
+    // First_floor=0;Second_floor=0;Third_floor=0;Forth_floor=0;
+    // First_floor=1;    
+    // pthread_join(musicThread, NULL);
 
+    pthread_create(&signinmusicThread, NULL, signinplayMusic, NULL);   
     get_player_info(&g);
+    pthread_join(signinmusicThread, NULL);
+
     get_innitial_values();
 
     while(menu_page(&g)){}
-
-    menu = 0;
     g.start_time = time(NULL);
+
     
-
-    timeout(40);
+    check_what_to_play(l);
     while(GAME_STATUS){
-
+        if(in_game)while(menu_page(&g)){};
         draw_menu_border();
         check_room_index();
         draw_rooms();
         draw_player(g);
         draw_hungerbar();
         draw_heathbar();
-        draw_gold_count();
+
         draw_food_count();
         int ch = getch();
         handle_movement(ch, &g.player);
@@ -198,8 +236,8 @@ int main(){
         clear_massages();
         Check_winning_or_losing();
     }
-    pthread_join(musicThread, NULL);
-
+    Mix_CloseAudio();
+    SDL_Quit();
     return 0;
 }
 
@@ -214,7 +252,6 @@ int main(){
 void welcome_panel(){
     back_ground_sky();
     draw_menu_border();
-
     for (int j = 11 ; j <= 28 ; j++){
         for (int i = 68 ; i <= 114 ; i++){
             mvprintw( j , i , " ");
@@ -236,8 +273,16 @@ void welcome_panel(){
 }
 
 void get_innitial_values(){
+    strcpy(g.melee_weapon_name,"Mace");
+    g.melee_weapon = 0;
+    g.range_weapon = 0; 
     g.hunger = 100;
     g.speed = 1;
+    g.magic_wand=0 ;
+    g.arrows=0;
+    g.dagger=0;
+    g.sword=0;
+    g.mace=1;
     if(strcmp(g.name , "Guest") == 0){
         return;
     }
@@ -322,6 +367,7 @@ void get_player_info(Game *g){
         strcpy(g->email , "None");
         break;
     }
+    signin = 0;
     clear();
 }
 
@@ -554,9 +600,14 @@ void get_user_password_from_loggin(Game *g,FILE *fptr){
     noecho();
 }
 bool check_user_password_from_loggin(Game *g, char * password){
-    if (password == 'F'){
-    mvprintw(LINES / 2 - 1, COLS / 2 - 15, "                            ");
-    mvprintw(LINES / 2 - 1, COLS / 2 - 15, "Enter your Email: ");    
+    if (strcmp(password , "F")==0){
+        echo();
+    mvprintw(LINES / 2  , COLS / 2 - 15, "                                           ");
+    mvprintw(LINES / 2 - 1, COLS / 2 - 15, "                                        ");
+    mvprintw(LINES / 2 - 2, COLS / 2 + 2, "                                        ");
+    mvprintw(LINES / 2 - 2, COLS / 2 - 15, "Enter your Email: ");  
+    getnstr(password, 50); 
+    noecho();     
     }
     FILE *ifp;
     char filepath[1024];
@@ -577,6 +628,12 @@ bool check_user_password_from_loggin(Game *g, char * password){
 
 
 int menu_page(Game *g){
+    pthread_t menumusicThread;
+    menu = 1;
+    if(menu_playing == 0){
+        pthread_create(&menumusicThread, NULL, menuplayMusic, NULL);    
+        menu_playing = 1; 
+    }
     draw_menu_border();
 
     const char *levels[] = {"Start a new game", "Resume", "Profile" , "Score board" , "Options" , "Exit"};
@@ -610,9 +667,12 @@ int menu_page(Game *g){
 
     switch (choice){
     case 0:
-        clear();
         g->games_started += 1;
-        //create_a_new_game(g);
+        in_game = 0;
+        menu = 0;
+        menu_playing = 0;
+         pthread_join(menumusicThread, NULL);        
+        clear();
         break;
     case 1:
         clear();
@@ -633,6 +693,10 @@ int menu_page(Game *g){
     case 5:
         add_to_score_board();
         set_final_values();
+        menu = 0;
+        pthread_join(menumusicThread, NULL); 
+        Mix_CloseAudio();
+        SDL_Quit();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "            Are you Sure?          ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
@@ -641,6 +705,7 @@ int menu_page(Game *g){
         exit(0);
         break;
     }
+
     return choice;
     clear();
 }
@@ -651,38 +716,69 @@ void draw_rooms(){
     for (int j = 2 ; j < 32 ; j++){
         for (int i = 2 ; i < 184 ; i++){
             if(map[l][j][i].flags){
-                if(map[l][j][i].signs == 'G'){
+                if(map[l][j][i].signs == 'a'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , apple);
+                    attroff(COLOR_PAIR(1));
+                    refresh();
+                }
+                else if(map[l][j][i].signs == 'G'){
                     attron(COLOR_PAIR(3));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    mvprintw( j , i , "%s" , coin);
                     attroff(COLOR_PAIR(3));
+                    refresh();
+                }
+                else if(map[l][j][i].signs == 'D'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%s" , blackcoin);
+                    attroff(COLOR_PAIR(8));
                     refresh();
                 }
                 else if(map[l][j][i].layer == 30 && map[l][j][i].signs == 'U'){
                     attron(COLOR_PAIR(1));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    mvprintw( j , i , "%s" , "☌");
                     attroff(COLOR_PAIR(1));  
                 } 
                 else if(map[l][j][i].layer == 31 && map[l][j][i].signs == 'U'){
                     attron(COLOR_PAIR(5));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    mvprintw( j , i , "%s" , potionn);
                     attroff(COLOR_PAIR(5));  
                 } 
                 else if(map[l][j][i].layer == 32 && map[l][j][i].signs == 'U'){
                     attron(COLOR_PAIR(2));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    mvprintw( j , i , "%s" , "⛦");
                     attroff(COLOR_PAIR(2));  
                 }  
-                else if(map[l][j][i].signs == 'a'){
-                    attron(COLOR_PAIR(6));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(6));  
-                } 
                 else if(map[l][j][i].signs == 'm'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "♢");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                } 
+                else if(map[l][j][i].signs == 'J'){
                     attron(COLOR_PAIR(8));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    mvprintw( j , i , "%s" , daggerr);
+                    attroff(COLOR_PAIR(8)); 
+                    refresh(); 
+                }
+                else if(map[l][j][i].signs == 'B'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%s" , swordd);
                     attroff(COLOR_PAIR(8)); 
                     refresh(); 
                 }  
+                else if(map[l][j][i].signs == 'A'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%s" , arroww);
+                    attroff(COLOR_PAIR(8)); 
+                    refresh(); 
+                } 
+                else if(map[l][j][i].signs == 'L'){
+                    attron(COLOR_PAIR(8));
+                    mvprintw( j , i , "%s" , wandd);
+                    attroff(COLOR_PAIR(8)); 
+                    refresh(); 
+                }   
                 else if(l == 3 && j>=y_1[l][3] && j <= y2[l][3] && i>=x1[l][3]
                  && i<=x2[l][3] && map[l][j][i].signs != '+'){
                     attron(COLOR_PAIR(3));
@@ -726,6 +822,10 @@ void show_user_profile(Game *g){
 
 void show_score_board(){
     draw_menu_border();
+    int page = 0;
+    int ceiling;
+    float temp;
+    int show_leader_board = 1;
     Leaderboard lead[100];
     FILE *ifp;
     int counter = 0;
@@ -748,55 +848,106 @@ void show_score_board(){
         fprintf(ifp ,"%s %d %d %d\n",lead[o].name ,lead[o].score , lead[o].games_started , lead[o].games_finished);
     }    
     back_ground_sky();
-    for (int j = 3 ; j <= 10 + counter ; j++){
-        for (int i = 12 ; i <= 70 ; i++){
+    for (int j = 3 ; j <= 10 + 5 ; j++){
+        for (int i = 7 ; i <= 70 ; i++){
             mvprintw( j , i , " ");
         }
     }
-    mvprintw(6 , 12 ,"Rank    |    Name  Score   Gold   Started   Won");
-    for (int o = 0 ; o < counter ; o++){
-        if (strcmp(g.name , lead[o].name)==0){
-            attron(A_REVERSE);
-        }
-        if(o == 0){
-            attron(COLOR_PAIR(3)| A_BOLD);
-            mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
-            , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
-            attroff(A_BOLD);
-    attroff(A_REVERSE);
-        }
-        if(o == 1){
-            attron(COLOR_PAIR(5));
-            mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
-            , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
-attroff(A_REVERSE);
-        }
-        if(o == 2){
-            attron(COLOR_PAIR(2));
-            mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
-            , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
+    fclose(ifp);
+
+    temp = counter / 7;
+    ceiling = counter / 7;
+    if (temp > ceiling) ceiling += 1;
+
+    while(show_leader_board){
+        draw_menu_border();
+        mvprintw(6 , 12 ,"Rank    |    Name  Score   Gold   Started   Won");
+        if (page == 0 ){
+            for (int o = 0 ; o < 7 ; o++){
+                if (strcmp(g.name , lead[o].name)==0){
+                    attron(A_REVERSE);
+                }
+                if(o == 0){
+                    attron(COLOR_PAIR(3)| A_BOLD);
+                    mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                    , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
+                    attroff(A_BOLD);
+                    attroff(A_REVERSE);
+                }
+                if(o == 1){
+                    attron(COLOR_PAIR(5));
+                    mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                    , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
+                    attroff(A_REVERSE);
+                }
+                if(o == 2){
+                    attron(COLOR_PAIR(2));
+                    mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                    , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);
+                    attroff(COLOR_PAIR(2));
+                    attroff(COLOR_PAIR(3));
+                    attroff(COLOR_PAIR(5));
+                attroff(A_REVERSE);
+                }
+                if(o != 0 && o != 1 && o != 2) { mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished); attroff(A_REVERSE);}
+            }
+            mvprintw(7 , 10 , "Chmp");
+            mvprintw(8 , 10 , "Goat");
+            mvprintw(9 , 10 , "Best");
+            move(7,15);refresh();
+            wprintf(L"%ls\n", L"\x01F3C6");
+            refresh();move(8,13);refresh();
+            wprintf(L"%ls\n", L"\x01F451");
+            refresh();move(9,11);refresh();
+            wprintf(L"%ls\n", L"\x01F3C5");
+            refresh();
             attroff(COLOR_PAIR(2));
             attroff(COLOR_PAIR(3));
             attroff(COLOR_PAIR(5));
-        attroff(A_REVERSE);
         }
-        if(o != 0 && o != 1 && o != 2) { mvprintw(7+o , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
-        , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished); attroff(A_REVERSE);}
+        else{
+            refresh();
+            for (int j = 7 ; j <= 15; j++){
+                for (int i = 7 ; i <= 70 ; i++){
+                    mvprintw( j , i , " ");
+                }
+            }
+            if(page * 7 + 6 >= counter){
+                for (int o = page* 7 ; o <= counter ; o++){
+                    if (strcmp(g.name , lead[o].name)==0){
+                        attron(A_REVERSE);
+                    }
+                    mvprintw(7+o-(page*7) , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                            , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);  
+                            attroff(A_REVERSE);          
+                }
+            }
+            else{
+                for (int o = page* 7 ; o <= page * 7 + 6 ; o++){
+                    if (strcmp(g.name , lead[o].name)==0){
+                        attron(A_REVERSE);
+                    }
+                    mvprintw(7+o-(page*7) , 18 ,"%2d|%8s  %3d    %4d      %2d      %2d" ,o + 1,lead[o].name ,lead[o].score 
+                            , 6 * lead[o].score , lead[o].games_started , lead[o].games_finished);  
+                            attroff(A_REVERSE);          
+                }                
+            }
+        }
+        int ch = getch();
+        if (ch == KEY_UP){
+            if(page != 0)
+                page -= 1;
+        }
+        else if (ch == KEY_DOWN){
+            if(page != ceiling)
+                page += 1;
+        }
+        else if (ch == 10){
+            break;
+        }
     }
-    mvprintw(7 , 10 , "Camp");
-    mvprintw(8 , 10 , "Goat");
-    mvprintw(9 , 10 , "Best");
-    fclose(ifp);
-    move(7,15);refresh();
-    wprintf(L"%ls\n", L"\x01F3C6");
-    refresh();move(8,13);refresh();
-    wprintf(L"%ls\n", L"\x01F451");
-    refresh();move(9,11);refresh();
-    wprintf(L"%ls\n", L"\x01F3C5");
-    refresh();getch(); clear();
-    attroff(COLOR_PAIR(2));
-    attroff(COLOR_PAIR(3));
-    attroff(COLOR_PAIR(5));
+    clear();
 }
 void add_to_score_board(){
     if(strcmp(g.name , "Guest") == 0){
@@ -875,10 +1026,77 @@ void show_options_menu(Game* g){
         break;
     case 2:
         clear();
-        // Set_game_music(g);
+        Set_game_music();
         break;
     clear();
     }
+}
+void Set_game_music(){
+    draw_menu_border();
+    const char *levels[] = {"Master Valume","Water Fall", "Snowy","Another Medium", "Core" };
+    int choice = 0;
+    back_ground_sky();
+    for (int j = 3 ; j <= 14 ; j++){
+        for (int i = 14 ; i <= 48 ; i++){
+            mvprintw( j , i , " ");
+        }
+    }
+
+    while (1){
+        draw_menu_border();
+        mvprintw(1, 1, " ");
+        for (int i = 0; i < 5; ++i){
+            if (i == choice)
+                attron(A_REVERSE);
+              if(i == 0&&dimmaster==1) {attron(A_DIM);mvprintw(7 + i, 18, "%s", levels[i]);attroff(A_DIM);}
+            else if(i == 1&&dim1 == 1) {attron(A_DIM);mvprintw(7 + i, 20, "%s", levels[i]);attroff(A_DIM);}
+            else if(i == 2&&dim2 == 1) {attron(A_DIM);mvprintw(7 + i, 20, "%s", levels[i]);attroff(A_DIM);}
+            else if(i == 3&&dim3 == 1) {attron(A_DIM);mvprintw(7 + i, 20, "%s", levels[i]);attroff(A_DIM);}
+            else if(i == 4&&dim4 == 1) {attron(A_DIM);mvprintw(7 + i, 20, "%s", levels[i]);attroff(A_DIM);}
+            else if(i==0) mvprintw(7 + i, 18, "%s", levels[i]);
+            else mvprintw(7 + i, 20, "%s", levels[i]);
+            if (i == choice)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_UP)
+            choice = (choice == 0) ? 4 : choice - 1;
+        else if (ch == KEY_DOWN)
+            choice = (choice == 4) ? 0 : choice + 1;
+        else if (ch == 'q'){
+            clear();
+            break;
+        }
+        else if (ch == 10){
+
+            switch (choice){
+            case 0:
+                if (dimmaster == 0){First_floor = 0;
+                dim1=1;dim2=1;dim3=1;dim4=1;dimmaster=1;
+                Second_floor=0;Third_floor=0;Forth_floor=0;}
+                else {First_floor = 1; dim1= 0;dim2=0;dim3=0;dim4=0;
+                Second_floor=1;Third_floor=1;Forth_floor=1;dimmaster=0;}
+                break;               
+            case 1:
+                if (dim1 == 0){First_floor = 0; dim1 = 1;}
+                else {First_floor = 1; dim1 = 0;}
+                break;
+            case 2:
+                if (dim2 == 0) {Second_floor = 0 ;dim2 = 1;}
+                else {Second_floor = 0 ;dim2 = 0;}
+                break;
+            case 3:
+                if (dim3 == 0){Third_floor = 0; dim3 = 1;}
+                else {Third_floor = 0;dim3 = 0;}
+                break;
+            case 4:
+                if (dim4 == 0){Forth_floor = 0 ;dim4 = 1;}
+                else {Forth_floor = 0 ;dim4 = 0;}
+                break;
+            }        
+        }   
+    }   
 }
 void Set_game_difficulty(){
     draw_menu_border();
@@ -912,19 +1130,19 @@ void Set_game_difficulty(){
 
     switch (choice){
     case 0:
-        difficulty = 20;
+        difficulty = 6;
         break;
     case 1:
-        difficulty = 15;
+        difficulty = 4;
         break;
     case 2:
-        difficulty = 10;
+        difficulty = 2;
         break;
     case 3:
         difficulty = 0;
         break;
     case 4:
-        difficulty = 2000000000;
+        difficulty = -2000000000;
         break;
     default:
         clear();
@@ -995,13 +1213,22 @@ void draw_player(Game g){
 }
 
 void draw_hungerbar(){
-    if (elapsed == 0){
-        if (healing%40 == 0){
+    if (healing_speed == 2){
+        if (healing%4 == 0){
             damage -= 1;
             if (damage < 0) damage = 0;
-            output_massages(8);
+            output_massages(20);
         }
-        else if((healing - 1)%40 == 0){
+        healing += 1;
+        if(healing == 10){
+            elapsed += 1;
+            hunger = 0;
+            healing = 0;
+            healing_speed = 0;
+        }
+    }
+    if (elapsed == 0){
+        if (healing%4 == 0){
             damage -= 1;
             if (damage < 0) damage = 0;
             output_massages(8);
@@ -1009,44 +1236,53 @@ void draw_hungerbar(){
     } 
     hunger++;
     if (elapsed == 0){
-        healing += healing_speed;
-        if(healing == 200 || healing == 199 ){
+        healing += 1;
+        if(healing == 15){
             elapsed += 1;
             hunger = 0;
             healing = 0;
         }
     }
+    else if (elapsed == 100){
+        if (hunger == 1){
+            hunger = 0;
+            damage++;
+        }
+    }
     else{
         if(g.speed == 1){
-            if (hunger == 60 - difficulty){
+            if (hunger == 12 - difficulty){
                 hunger = 0;
                 elapsed++;
             }
         }
         else{
-            if (hunger == 30 - difficulty/2){
+            if (hunger == 9 - difficulty/2){
                 hunger = 0;
                 elapsed++;
             }        
         }
     }
     int remaining = 100 - elapsed;
+    if(remaining <= 0){
+        elapsed = 100;
+    }
     float fraction = (float)remaining / 100;
-    int width = 60 * fraction;
+    int width = 50 * fraction;
 
     if(remaining < 90){
-        if(hunger == 50){
+        if(hunger == 5){
             damage++;
         }
     }
     attron(COLOR_PAIR(1));
     for (int i = 1; i <= width; ++i)
-        mvprintw(35, i + 94, "#");
+        mvprintw(35, i + 104, "#");
     attroff(COLOR_PAIR(1));
 
     attron(COLOR_PAIR(2));
-    for (int i = width + 1; i <= 60; ++i)
-        mvprintw(35, i + 94, ".");
+    for (int i = width + 1; i <= 50; ++i)
+        mvprintw(35, i + 104, ".");
     attroff(COLOR_PAIR(2));
 
     mvprintw(35, 93, "Hunger: %d ", remaining);
@@ -1056,16 +1292,16 @@ void draw_hungerbar(){
 void draw_heathbar(){
     int remaining = 100 - damage;
     float fraction = (float)remaining / 100;
-    int width = 60 * fraction;
+    int width = 50 * fraction;
 
     attron(COLOR_PAIR(1));
     for (int i = 1; i <= width; ++i)
-        mvprintw(36, i + 94, "#");
+        mvprintw(36, i + 104, "#");
     attroff(COLOR_PAIR(1));
 
     attron(COLOR_PAIR(2));
-    for (int i = width + 1; i <= 60; ++i)
-        mvprintw(36, i + 94, ".");
+    for (int i = width + 1; i <= 50; ++i)
+        mvprintw(36, i + 104, ".");
     attroff(COLOR_PAIR(2));
 
     mvprintw(36, 93, "Health: %d ", remaining);
@@ -1073,17 +1309,16 @@ void draw_heathbar(){
     mvprintw(36, 155, "]");
 }
 
-void draw_gold_count(){
-    mvprintw(37, 93, "Gold: %d ", g.gold);
-}
 void draw_food_count(){
-    mvprintw(38, 93, "Magical Food: %d ", g.magic_food); 
-    mvprintw(39, 93, "Quality Food: %d ", g.quality_food);
-    mvprintw(40, 93, "Normal Food: %d ", g.normal_food);
-    mvprintw(41, 93, "Roten Flesh: %d ", g.rotenflesh);
+    mvprintw(37, 93, "Gold: %d ", g.gold);
+    mvprintw(38, 93, "Magical Food: %d            ", g.magic_food); 
+    mvprintw(39, 93, "Quality Food: %d            ", g.quality_food);
+    mvprintw(40, 93, "Normal Food: %d             ", g.normal_food);
+    mvprintw(41, 93, "Roten Flesh: %d             ", g.rotenflesh);
+    mvprintw(42, 93, "Melee Weapon: %s            ", g.melee_weapon_name);  
+    mvprintw(43, 93, "Range Weapon: %s            ", g.range_weapon_name);
 }
 void weapon_menu(){
-    timeout(-1);
     const char *levels[] = {"Magic Wand","Arrows","Dagger","Mace","sword" , "Resume"};
     int choice = 0;
     while (1){
@@ -1097,8 +1332,8 @@ void weapon_menu(){
             if(i == 0) mvprintw(36 + i, 160, "%d %s", g.magic_wand , levels[i] );
             if(i == 1) mvprintw(36 + i, 160, "%d %s", g.arrows , levels[i] );
             if(i == 2) mvprintw(36 + i, 160, "%d %s", g.dagger , levels[i] );
-            if(i == 3) mvprintw(37 + i, 160, "%s", levels[i] );    
-            if(i == 4) mvprintw(37 + i, 160, "%s" , levels[i] );     
+            if(i == 3) mvprintw(37 + i, 160, "%d %s", g.mace,levels[i] );    
+            if(i == 4) mvprintw(37 + i, 160, "%d %s" , g.sword,levels[i] );     
             if(i == 5) mvprintw(38 + i, 158, "%s" , levels[i] );      
             if (i == choice)
                 attroff(A_REVERSE);
@@ -1119,41 +1354,37 @@ void weapon_menu(){
 
     switch (choice){
     case 0:
-        if(g.Health_potin > 0){
-            damage -= 3;
-            if (damage < 0)damage = 0;
-            on_potions = 1;
-            healing_speed = 2;
-            output_massages(17);
-            g.Health_potin -= 1;
-        }
+        g.range_weapon = 1;
+        strcpy(g.range_weapon_name , levels[choice]);
         break;
     case 1:
-        if(g.Speed_potion > 0){
-            g.speed = 2;
-            on_potions = 1;
-            output_massages(18);
-            g.Speed_potion -= 1;
-        }
+        g.range_weapon = 2;
+        strcpy(g.range_weapon_name , levels[choice]);
         break;
     case 2:
-        if(g.Damage_potion > 0){
-//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
+        g.range_weapon = 3;
+        strcpy(g.range_weapon_name , levels[choice]);
 
-        }
+//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
         break;
     case 3:
-        difficulty = 0;
+        g.melee_weapon = 1;
+        strcpy(g.melee_weapon_name , levels[choice]);
+
+        break;
+    case 4:
+        g.melee_weapon = 2;
+        strcpy(g.melee_weapon_name , levels[choice]);
+
         break;
     default:
         clear();
     }    
-    timeout(40);
     refresh();
 }
 
 void magic_menu(){
-    timeout(-1);
+
     const char *levels[] = {"Heath", "Speed" ,"Damage", "Roten Flesh" , "Resume"};
     int choice = 0;
     while (1){
@@ -1188,7 +1419,7 @@ void magic_menu(){
     switch (choice){
     case 0:
         if(g.Health_potin > 0){
-            damage -= 3;
+            damage -= 1;
             if (damage < 0)damage = 0;
             on_potions = 1;
             healing_speed = 2;
@@ -1217,11 +1448,9 @@ void magic_menu(){
         clear();
     }    
 
-    timeout(40);
     refresh();
 }
 void food_menu(){
-    timeout(-1);
     const char *levels[] = {"Normal", "Magical" ,"Quality", "Roten Flesh" , "Resume"};
     int choice = 0;
     while (1){
@@ -1257,6 +1486,7 @@ void food_menu(){
     case 0:
         if(g.normal_food > 0){
             elapsed -=10;
+            damage -= 3;
             if (elapsed < 0) elapsed = 0;
             if (damage < 0)damage = 0;
             output_massages(7);
@@ -1266,7 +1496,7 @@ void food_menu(){
     case 1:
         if(g.magic_food > 0){
             elapsed -=12;
-            damage -= 3;
+            damage -= 5;
             if (elapsed < 0) elapsed = 0;
             if (elapsed == 0) damage -= 10;
             if (damage < 0) damage = 0;
@@ -1276,6 +1506,7 @@ void food_menu(){
     case 2:
         if(g.quality_food > 0){
             elapsed -=22;
+            damage -= 3;
             if (elapsed < 0) elapsed = 0;
             if (elapsed == 0) damage -= 10;
             if (damage < 0) damage = 0;
@@ -1291,7 +1522,6 @@ void food_menu(){
         clear();
     }    
 //! ************anva ghaza ha be nesbat faz 2 kamel shavad*************************************** */
-    timeout(40);
     refresh();
 }
 
@@ -1300,7 +1530,9 @@ void handle_movement(int ch, Pos *p ){
     switch (ch) {
     case KEY_UP:
         if (map[l][p->y - g.speed][p->x].signs == '<' ){
+            
             l++;
+            check_what_to_play(l);
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
@@ -1309,7 +1541,6 @@ void handle_movement(int ch, Pos *p ){
         if (map[l][p->y - g.speed][p->x].flags == 3 ){
             map[l][p->y - g.speed][p->x].signs = '?'; 
             clear();
-            timeout(-1);
             back_ground_sky();
             draw_menu_border();
             for (int i = COLS/2 - 10 ; i <= COLS/2 + 10 ; i++){
@@ -1328,8 +1559,7 @@ void handle_movement(int ch, Pos *p ){
             mvprintw( LINES/2 , COLS/2 , "@"); ;
             damage = 0;
             getch();
-            clear();    
-            timeout(40);      
+            clear();         
         }
         if (map[l][p->y - g.speed][p->x].signs == '>' ){
             l--;
@@ -1337,6 +1567,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][3] + 3;
             clear();
             output_massages(11);
+                        check_what_to_play(l);
         }
         else if (map[l][p->y - g.speed][p->x].signs == 'm' ||
         map[l][p->y - g.speed][p->x].signs == 'a' ||
@@ -1345,7 +1576,11 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y - g.speed][p->x].signs == '+' ||
           map[l][p->y - g.speed][p->x].signs == 'G'||
           map[l][p->y - g.speed][p->x].signs == 'U'||
-          map[l][p->y - g.speed][p->x].signs == 'W'||         
+          map[l][p->y - g.speed][p->x].signs == 'W'|| 
+          map[l][p->y - g.speed][p->x].signs == 'L'|| 
+          map[l][p->y - g.speed][p->x].signs == 'A'|| 
+          map[l][p->y - g.speed][p->x].signs == 'B'|| 
+          map[l][p->y - g.speed][p->x].signs == 'J'|| 
           map[l][p->y - g.speed][p->x].signs == 'D')
             p->y -= g.speed;
         break;
@@ -1356,6 +1591,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][0] + 5;
             clear();
             output_massages(12);
+                        check_what_to_play(l);
         }
         if (map[l][p->y + g.speed][p->x].signs == '>' ){
             l--;
@@ -1363,6 +1599,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][3] + 3;
             clear();
             output_massages(11);
+                        check_what_to_play(l);
         }
         else if (map[l][p->y + g.speed][p->x].signs == '.' ||
         map[l][p->y + g.speed][p->x].signs == 'a' ||
@@ -1372,6 +1609,10 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y + g.speed][p->x].signs == 'G'||
           map[l][p->y + g.speed][p->x].signs == 'W'||
           map[l][p->y + g.speed][p->x].signs == 'U'||
+          map[l][p->y + g.speed][p->x].signs == 'J'||
+          map[l][p->y + g.speed][p->x].signs == 'B'||
+          map[l][p->y + g.speed][p->x].signs == 'A'||
+          map[l][p->y + g.speed][p->x].signs == 'L'||
           map[l][p->y + g.speed][p->x].signs == 'D')
             p->y += g.speed;      
         break;
@@ -1382,6 +1623,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][0] + 5;
             clear();
             output_massages(12);
+                        check_what_to_play(l);
         }
         if (map[l][p->y][p->x - g.speed].signs == '>' ){
             l--;
@@ -1389,6 +1631,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][3] + 3;
             clear();
             output_massages(11);
+                        check_what_to_play(l);
         }
         else if (map[l][p->y][p->x - g.speed].signs == 'm' ||
         map[l][p->y][p->x - g.speed].signs == 'a' ||
@@ -1399,16 +1642,24 @@ void handle_movement(int ch, Pos *p ){
         map[l][p->y][p->x - g.speed].signs == 'U' ||
         map[l][p->y][p->x - g.speed].signs == '?' ||
         map[l][p->y][p->x - g.speed].signs == 'W' ||
+        map[l][p->y][p->x - g.speed].signs == 'J' ||
+        map[l][p->y][p->x - g.speed].signs == 'B' ||
+        map[l][p->y][p->x - g.speed].signs == 'L' ||
+        map[l][p->y][p->x - g.speed].signs == 'A' ||
         map[l][p->y][p->x - g.speed].signs == 'D' )
             p->x -= g.speed;
         break;
     case KEY_RIGHT:
         if (map[l][p->y][p->x + g.speed].signs == '<' ){
             l++;
+            if(l==1)First_floor = 0;
+            if(l==2)Second_floor = 0;           
+            if(l==3)Third_floor = 0;
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
             output_massages(12);
+                        check_what_to_play(l);
         }
         if (map[l][p->y][p->x + g.speed].signs == '>' ){
             l--;
@@ -1416,6 +1667,7 @@ void handle_movement(int ch, Pos *p ){
             g.player.x = x1[l][3] + 3;
             clear();
             output_massages(11);
+                        check_what_to_play(l);
         }
         else if (map[l][p->y][p->x + g.speed].signs == 'a'||
         map[l][p->y][p->x + g.speed].signs == 'm' ||
@@ -1425,7 +1677,11 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y][p->x + g.speed].signs == 'G' ||
           map[l][p->y][p->x + g.speed].signs == 'D' ||
           map[l][p->y][p->x + g.speed].signs == 'U' ||  
-          map[l][p->y][p->x + g.speed].signs == 'W' ||        
+          map[l][p->y][p->x + g.speed].signs == 'W' ||     
+          map[l][p->y][p->x + g.speed].signs == 'J' ||
+          map[l][p->y][p->x + g.speed].signs == 'B' ||
+          map[l][p->y][p->x + g.speed].signs == 'A' ||  
+          map[l][p->y][p->x + g.speed].signs == 'L' ||    
           map[l][p->y][p->x + g.speed].layer == 80||
         map[l][p->y][p->x + g.speed].signs == '?')
             p->x += g.speed;
@@ -1477,48 +1733,85 @@ void handle_movement(int ch, Pos *p ){
         l++;
         break;
     case 'm':
-        timeout(-1);
-    for (int j = 2 ; j < 32 ; j++){
-        for (int i = 2 ; i < 184 ; i++){
-                if(map[l][j][i].signs == 'G'){
-                    attron(COLOR_PAIR(3));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(3));
-                    refresh();
+        for (int j = 2 ; j < 32 ; j++){
+                for (int i = 2 ; i < 184 ; i++){
+                    if(map[l][j][i].signs == 'a'){
+                        attron(COLOR_PAIR(1));
+                        mvprintw( j , i , "%s" , apple);
+                        attroff(COLOR_PAIR(1));
+                        refresh();
+                    }
+                    else if(map[l][j][i].signs == 'G'){
+                        attron(COLOR_PAIR(3));
+                        mvprintw( j , i , "%s" , coin);
+                        attroff(COLOR_PAIR(3));
+                        refresh();
+                    }
+                    else if(map[l][j][i].signs == 'D'){
+                        attron(COLOR_PAIR(8));
+                        mvprintw( j , i , "%s" , blackcoin);
+                        attroff(COLOR_PAIR(8));
+                        refresh();
+                    }
+                    else if(map[l][j][i].layer == 30 && map[l][j][i].signs == 'U'){
+                        attron(COLOR_PAIR(1));
+                        mvprintw( j , i , "%s" , "☌");
+                        attroff(COLOR_PAIR(1));  
+                    } 
+                    else if(map[l][j][i].layer == 31 && map[l][j][i].signs == 'U'){
+                        attron(COLOR_PAIR(5));
+                        mvprintw( j , i , "%s" , potionn);
+                        attroff(COLOR_PAIR(5));  
+                    } 
+                    else if(map[l][j][i].layer == 32 && map[l][j][i].signs == 'U'){
+                        attron(COLOR_PAIR(2));
+                        mvprintw( j , i , "%s" , "⛦");
+                        attroff(COLOR_PAIR(2));  
+                    }  
+                    else if(map[l][j][i].signs == 'm'){
+                        attron(COLOR_PAIR(1));
+                        mvprintw( j , i , "%s" , "♢");
+                        attroff(COLOR_PAIR(1)); 
+                        refresh(); 
+                    } 
+                    else if(map[l][j][i].signs == 'J'){
+                        attron(COLOR_PAIR(8));
+                        mvprintw( j , i , "%s" , daggerr);
+                        attroff(COLOR_PAIR(8)); 
+                        refresh(); 
+                    }
+                    else if(map[l][j][i].signs == 'B'){
+                        attron(COLOR_PAIR(8));
+                        mvprintw( j , i , "%s" , swordd);
+                        attroff(COLOR_PAIR(8)); 
+                        refresh(); 
+                    }  
+                    else if(map[l][j][i].signs == 'A'){
+                        attron(COLOR_PAIR(8));
+                        mvprintw( j , i , "%s" , arroww);
+                        attroff(COLOR_PAIR(8)); 
+                        refresh(); 
+                    } 
+                    else if(map[l][j][i].signs == 'L'){
+                        attron(COLOR_PAIR(8));
+                        mvprintw( j , i , "%s" , wandd);
+                        attroff(COLOR_PAIR(8)); 
+                        refresh(); 
+                    }   
+                    else if(l == 3 && j>=y_1[l][3] && j <= y2[l][3] && i>=x1[l][3]
+                    && i<=x2[l][3] && map[l][j][i].signs != '+'){
+                        attron(COLOR_PAIR(3));
+                        mvprintw( j , i , "%c" , map[l][j][i].signs);
+                        attroff(COLOR_PAIR(3)); 
+                        refresh();                     
+                    }   
+                    else{
+                        mvprintw( j , i , "%c" , map[l][j][i].signs);
+                    }             
                 }
-                else if(map[l][j][i].layer == 30 && map[l][j][i].signs == 'U'){
-                    attron(COLOR_PAIR(1));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(1));  
-                } 
-                else if(map[l][j][i].layer == 31 && map[l][j][i].signs == 'U'){
-                    attron(COLOR_PAIR(5));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(5));  
-                } 
-                else if(map[l][j][i].layer == 32 && map[l][j][i].signs == 'U'){
-                    attron(COLOR_PAIR(2));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(2));  
-                } 
-                else if(map[l][j][i].signs == 'a'){
-                    attron(COLOR_PAIR(6));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(6));  
-                } 
-                else if(map[l][j][i].signs == 'm'){
-                    attron(COLOR_PAIR(8));
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                    attroff(COLOR_PAIR(8));  
-                }   
-                else{
-                    mvprintw( j , i , "%c" , map[l][j][i].signs);
-                }             
             }
-        }
         getch();
         clear();
-        timeout(40);  
         break;
     case '0':
         set_final_values();
@@ -1527,8 +1820,7 @@ void handle_movement(int ch, Pos *p ){
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "            Are you Sure?          ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
         int ch = getch();
-        endwin();
-        exit(0);
+        in_game = 1;
         break;
     case 'p':
         switch (map[l][g.player.y][g.player.x].signs){
@@ -1560,6 +1852,40 @@ void handle_movement(int ch, Pos *p ){
                 }
                 else output_massages(10);
                 break;
+            case 'J':
+                if(map[l][g.player.y][g.player.x].count){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.dagger += map[l][g.player.y][g.player.x].count;
+                    map[l][g.player.y][g.player.x].count = 0;
+                    output_massages(20);
+                }
+                break;
+            case 'L':
+                if(map[l][g.player.y][g.player.x].count){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.magic_wand += map[l][g.player.y][g.player.x].count;
+                    map[l][g.player.y][g.player.x].count = 0;
+                    output_massages(20);
+                }
+                break;
+            case 'A':
+                if(map[l][g.player.y][g.player.x].count){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.arrows += map[l][g.player.y][g.player.x].count;
+                    map[l][g.player.y][g.player.x].count = 0;
+                    output_massages(20);
+                }
+                break;
+            case 'B':
+                if(g.sword == 0){
+                    if(map[l][g.player.y][g.player.x].count){
+                        map[l][g.player.y][g.player.x].signs = '.';
+                        g.sword += map[l][g.player.y][g.player.x].count;
+                        map[l][g.player.y][g.player.x].count = 0;
+                        output_massages(20);
+                    }
+                }
+                break;
             default:
                 break;
         }
@@ -1590,7 +1916,42 @@ void handle_movement(int ch, Pos *p ){
         break;
     case 'q':
         weapon_menu();
-        break;        
+        break; 
+    case 'c':
+/***********************************************************************************************/
+        break;
+    case ' ':
+        int cha = getch();
+        switch(cha){
+            case 't':
+            int range = 1;
+                for(range; range <= 4 ; range++){
+                    if(map[l][g.player.y-range][g.player.x].signs == '_' ||
+                    map[l][g.player.y-range][g.player.x].flags == 0){
+                        map[l][g.player.y-range+1][g.player.x].signs = 'J';  
+                        map[l][g.player.y-range + 1][g.player.x].count += 1;     
+                        break;
+                    }
+                    else if(map[l][g.player.y-range][g.player.x].signs == 'V'){
+                        map[l][g.player.y-range][g.player.x].health -= 12;
+                        if(map[l][g.player.y-range][g.player.x].health <=0){
+                            map[l][g.player.y-range][g.player.x].signs = '.';
+                            map[l][g.player.y-range][g.player.x].enemy = 0;
+                        }
+                        break;
+                    }
+                }
+                if(range == 5) {
+                    map[l][g.player.y-range + 1][g.player.x].signs = 'J';
+                    map[l][g.player.y-range + 1][g.player.x].count += 1;               
+                }
+                // map[l][g.player.y-range][g.player.x].flags = 2;
+                break;
+            case KEY_DOWN:
+            case KEY_LEFT:
+            case KEY_RIGHT:    
+        }
+        break;      
     default:
         break;
     }
@@ -1614,7 +1975,7 @@ void handle_movement(int ch, Pos *p ){
 }
 void clear_massages(){
         timer_1++;
-    if (timer_1 == 100){
+    if (timer_1 == 17){
         timer_1 = 0;
         output_massages(0);
     }
@@ -1723,6 +2084,12 @@ void output_massages(int massage){
             mvprintw(37 , 2 , "Total Damage Potions: %d                 " , g.Damage_potion);
             timer_1 = 0;
             break;
+        case 20:
+            output_massages(0);
+            mvprintw(36 , 2 , "NEed to be filled bothing is there           ");
+            mvprintw(37 , 2 , "NA NAN ANNAN AN NAN NAN NN NANN NAN A            ");
+            timer_1 = 0;
+            break;
         default:
             break;
     }
@@ -1730,32 +2097,122 @@ void output_massages(int massage){
 }
 
 /****************************************************************/
-void* playMusic(void* arg) {
-    // Initialize SDL and SDL_Mixer
+void* welcomeplayMusic(void* arg){
     SDL_Init(SDL_INIT_AUDIO);
     Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
     
     // Load the music file
     Mix_Music* welcome_music = Mix_LoadMUS("Welcome.mp3");
-    Mix_PlayMusic(welcome_music,-1);
+    Mix_PlayMusic(welcome_music,1);
     while(welcome) {}
     Mix_FreeMusic(welcome_music);
-
+    return NULL;
+}
+void* signinplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
+    Mix_Music* menu_music = Mix_LoadMUS("Signin.mp3");
+    Mix_PlayMusic(menu_music,-1);
+    while(signin) {}
+    Mix_FreeMusic(menu_music);
+    return NULL;
+}
+void* menuplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
     Mix_Music* menu_music = Mix_LoadMUS("Menu.mp3");
     Mix_PlayMusic(menu_music,-1);
     while(menu) {}
     Mix_FreeMusic(menu_music);
-
-    Mix_Music* First_floor_music = Mix_LoadMUS("First_floor.mp3");
+    return NULL;
+}
+void* firstfloorplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
+    Mix_Music* First_floor_music = Mix_LoadMUS("1_floor.mp3");
     Mix_PlayMusic(First_floor_music,-1);
     while(First_floor) {}
     Mix_FreeMusic(First_floor_music);
-
-    Mix_CloseAudio();
-    SDL_Quit();
     return NULL;
 }
-
+void* secondfloorplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
+    Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+    Mix_PlayMusic(Second_floor_music,-1);
+    while(Second_floor) {}
+    Mix_FreeMusic(Second_floor_music);
+    return NULL;
+}
+void* thirdfloorplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
+    Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+    Mix_PlayMusic(Second_floor_music,-1);
+    while(Second_floor) {}
+    Mix_FreeMusic(Second_floor_music);
+    return NULL;
+}
+void* forthfloorplayMusic(void* arg){
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    
+    // Load the music file
+    Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+    Mix_PlayMusic(Second_floor_music,-1);
+    while(Second_floor) {}
+    Mix_FreeMusic(Second_floor_music);
+    return NULL;
+}
+void check_what_to_play(int l){
+    First_floor_playing=0;
+    Second_floor_playing=0;
+    Third_floor_playing=0;
+    Forth_floor_playing=0;
+    pthread_t floormusicThread;
+    switch(l){
+        case 0:
+            // First_floor = 1;
+            // if(menu_playing == 0){
+                pthread_create(&floormusicThread, NULL, firstfloorplayMusic, NULL);    
+            //     First_floor_playing = 1; 
+            // }
+            break;
+        case 1:
+            // Second_floor = 1;
+            // if(menu_playing == 0){
+                pthread_create(&floormusicThread, NULL, secondfloorplayMusic, NULL);    
+               // Second_floor_playing = 1; 
+            //}
+                        break;
+        case 2:
+            //Third_floor = 1;
+            //if(menu_playing == 0){
+                pthread_create(&floormusicThread, NULL, thirdfloorplayMusic, NULL);    
+                //Third_floor_playing = 1; 
+            //}
+                        break;
+        case 3:
+            //Forth_floor = 1;
+            //if(menu_playing == 0){
+                pthread_create(&floormusicThread, NULL, forthfloorplayMusic, NULL);    
+                //Forth_floor_playing = 1; 
+            //}
+                        break;
+        default:
+            break;
+    }
+}
                          
 void back_ground_sky(){
 char background[10][200][200]=
@@ -1821,6 +2278,9 @@ void get_four_levels_rooms(){
                 map[l][j][i].signs = ' ';
                 map[l][j][i].flags = 0;
                 map[l][j][i].layer = 0;
+                map[l][j][i].enemy = 0;
+                map[l][j][i].count = 0;
+                map[l][j][i].health = 0;                
             }
         }
     }
@@ -1878,7 +2338,8 @@ void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     case 3:
         arrowsss.x = rand()%(x2 - x1 - 1) + x1 + 1;
         arrowsss.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-        map[l][arrowsss.y][arrowsss.x].layer = 30;
+        map[l][arrowsss.y][arrowsss.x].layer = 43;
+        map[l][arrowsss.y][arrowsss.x].count = 20;        
         map[l][arrowsss.y][arrowsss.x].signs = 'A';
         break;
     default:
@@ -1890,7 +2351,8 @@ void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
         case 3:
             magicwandd.x = rand()%(x2 - x1 - 1) + x1 + 1;
             magicwandd.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-            map[l][magicwandd.y][magicwandd.x].layer = 31;
+            map[l][magicwandd.y][magicwandd.x].layer = 42;
+            map[l][magicwandd.y][magicwandd.x].count = 8; 
             map[l][magicwandd.y][magicwandd.x].signs = 'L';
             break;
         default :
@@ -1902,7 +2364,8 @@ void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
         case 3:
             daggerrr.x = rand()%(x2 - x1 - 1) + x1 + 1;
             daggerrr.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-            map[l][daggerrr.y][daggerrr.x].layer = 32;
+            map[l][daggerrr.y][daggerrr.x].layer = 41;
+            map[l][daggerrr.y][daggerrr.x].count = 10; 
             map[l][daggerrr.y][daggerrr.x].signs = 'J';
             break;
         default :
@@ -1914,7 +2377,8 @@ void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
         case 3:
             pocketswordd.x = rand()%(x2 - x1 - 1) + x1 + 1;
             pocketswordd.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
-            map[l][pocketswordd.y][pocketswordd.x].layer = 32;
+            map[l][pocketswordd.y][pocketswordd.x].layer = 40;
+            map[l][pocketswordd.y][pocketswordd.x].count = 1;
             map[l][pocketswordd.y][pocketswordd.x].signs = 'B';
             break;
         default :
@@ -2128,7 +2592,7 @@ void generage_food_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
             break;
     }   
 }
-void fill_the_map(){
+void fill_the_map(){  
     for(int l = 0 ; l < 4 ; l++){
         for (int r = 0 ; r < 8 ; r++){  
             for (int i = x1[l][r] ; i <= x2[l][r] ; i++){
@@ -2157,7 +2621,7 @@ void fill_the_map(){
                          map[l][y_1[l][r] + 1][x2[l][r] - 2].signs = 'G';
                          map[l][y_1[l][r] + 2][x2[l][r] - 3].signs = 'G';
                          map[l][y_1[l][r] + 1][x2[l][r] - 4].signs = 'G';
-                        map[l][y2[l][r] - 1][x1[l][r] + 4].signs = 'G';
+                         map[l][y2[l][r] - 1][x1[l][r] + 4].signs = 'G';
                          map[l][y2[l][r] - 1][x1[l][r] + 2].signs = 'G';                            
                     }
                 }
@@ -2348,6 +2812,13 @@ void fill_the_map(){
         generage_pillars_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l); 
         generage_potions_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
         generage_weapons_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
+        generage_enemies_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
+            if(r==3 && l!= 3){
+                map[l][y2[l][r] - 2][x1[l][r] + 4].signs = '<';
+            }
+            if(r==0 && l!= 0){
+                map[l][y_1[l][r] + 2][x1[l][r] + 3].signs = '>';
+            }
         }
     }   
 } 
@@ -2384,7 +2855,13 @@ void check_room_index(){
             }
         }
     }
-    if (map[l][g.player.y][g.player.x].signs == '.'){
+    if (map[l][g.player.y][g.player.x].signs == '.'||
+    map[l][g.player.y][g.player.x].signs == 'a'||
+    map[l][g.player.y][g.player.x].signs == 'G'||
+    map[l][g.player.y][g.player.x].signs == 'U'||
+    map[l][g.player.y][g.player.x].signs == 'D'||
+    map[l][g.player.y][g.player.x].signs == 'm'||
+    map[l][g.player.y][g.player.x].signs == 'O'){
         if (g.player.y > 0 && g.player.y <= 15 && g.player.x > 0 && g.player.x <= 43){
             for (int i = x1[l][0] ; i <= x2[l][0] ; i++){
                 for (int j = y_1[l][0] ; j <= y2[l][0] ; j++){
@@ -2456,12 +2933,13 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
+        Mix_CloseAudio();
+        SDL_Quit();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "              Game Over            ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
+        in_game = 1;
         int ch = getch();
-        endwin();
-        exit(0);
     }
     if (map[l][g.player.y][g.player.x].signs == 'W'){
         timeout(-1);
@@ -2470,11 +2948,39 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
+        Mix_CloseAudio();
+        SDL_Quit();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "               You Won             ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
         int ch = getch();
-        endwin();
-        exit(0);    
+        in_game = 1;
     }
+}
+
+
+void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
+    
+    //  deamon
+
+    // int healthpotion =rand()%10;
+    Pos deamon;
+    int healthpotion = 3;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        // map[l][deamon.y][deamon.x].layer = 30;
+        map[l][deamon.y][deamon.x].signs = 'V';
+        map[l][deamon.y][deamon.x].health = 30;
+        break;
+    default:
+        break;
+    }
+
+
+
+
 }
