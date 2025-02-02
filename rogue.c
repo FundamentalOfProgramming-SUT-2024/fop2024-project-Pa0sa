@@ -18,6 +18,15 @@ typedef struct{
 } Pos;
 
 typedef struct{
+    Pos loc;
+    char sign;
+    int exist;
+    int hth;
+    int dmg;
+    int moveable;
+} Enemies;
+
+typedef struct{
     Pos player;
     Pos *items;
     int score;
@@ -49,6 +58,7 @@ typedef struct{
     int health;
     int enemy;
     int count;
+    Enemies mnst;
 } Map;
 
 typedef struct{
@@ -156,6 +166,7 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void fill_the_map();
 void handle_movement(int ch, Pos *p);
 void output_massages(int massage);
+void output_massages_target(int massage , int range);
 void draw_player(Game g);
 void draw_rooms();
 void check_room_index();
@@ -169,6 +180,10 @@ void* welcomeplayMusic(void* arg);
 void* signinplayMusic(void* arg);
 void* menuplayMusic(void* arg);
 void check_what_to_play(int l);
+
+void mosters_doing_damage();
+void mosters_moving_around();
+
 
 void Check_winning_or_losing();
 
@@ -231,7 +246,11 @@ int main(){
         draw_food_count();
         int ch = getch();
         handle_movement(ch, &g.player);
-        // mvprintw(40 , 110 , "%d , %d" , COLS , LINES);
+
+        mosters_moving_around(ch);
+        mosters_doing_damage();
+
+
         refresh();
         clear_massages();
         Check_winning_or_losing();
@@ -712,7 +731,6 @@ int menu_page(Game *g){
 
 
 void draw_rooms(){
-
     for (int j = 2 ; j < 32 ; j++){
         for (int i = 2 ; i < 184 ; i++){
             if(map[l][j][i].flags){
@@ -786,6 +804,12 @@ void draw_rooms(){
                     attroff(COLOR_PAIR(3)); 
                     refresh();                     
                 }   
+                else if(map[l][j][i].mnst.sign == 'V'){
+                    attron(COLOR_PAIR(2));
+                    mvprintw( j , i , "%s" , "G");
+                    attroff(COLOR_PAIR(2)); 
+                    refresh(); 
+                }                 
                 else{
                     mvprintw( j , i , "%c" , map[l][j][i].signs);
                 }             
@@ -1923,7 +1947,7 @@ void handle_movement(int ch, Pos *p ){
     case ' ':
         int cha = getch();
         switch(cha){
-            case 't':
+            case KEY_UP:
             int range = 1;
                 for(range; range <= 4 ; range++){
                     if(map[l][g.player.y-range][g.player.x].signs == '_' ||
@@ -1932,11 +1956,13 @@ void handle_movement(int ch, Pos *p ){
                         map[l][g.player.y-range + 1][g.player.x].count += 1;     
                         break;
                     }
-                    else if(map[l][g.player.y-range][g.player.x].signs == 'V'){
-                        map[l][g.player.y-range][g.player.x].health -= 12;
-                        if(map[l][g.player.y-range][g.player.x].health <=0){
-                            map[l][g.player.y-range][g.player.x].signs = '.';
-                            map[l][g.player.y-range][g.player.x].enemy = 0;
+                    else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'){
+                        map[l][g.player.y-range][g.player.x].mnst.hth -= 12;
+                        output_massages_target(21 , range);     
+                        if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
+                            map[l][g.player.y-range][g.player.x].mnst.sign = '.';
+                            map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
+
                         }
                         break;
                     }
@@ -2090,10 +2116,22 @@ void output_massages(int massage){
             mvprintw(37 , 2 , "NA NAN ANNAN AN NAN NAN NN NANN NAN A            ");
             timer_1 = 0;
             break;
+
         default:
             break;
     }
-
+}
+void output_massages_target(int massage , int range){
+    switch(massage){
+        case 21:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've hit a Deamon                           ");
+            mvprintw(37 , 2 , "Deamon's Health at %d                         " ,map[l][g.player.y-range][g.player.x].mnst.hth );
+            timer_1 = 0;
+            break;
+        default:
+            break;
+    }
 }
 
 /****************************************************************/
@@ -2933,8 +2971,6 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
-        Mix_CloseAudio();
-        SDL_Quit();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "              Game Over            ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
@@ -2948,8 +2984,6 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
-        Mix_CloseAudio();
-        SDL_Quit();
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "               You Won             ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
@@ -2963,7 +2997,6 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     
     //  deamon
 
-    // int healthpotion =rand()%10;
     Pos deamon;
     int healthpotion = 3;
     switch(healthpotion){
@@ -2973,14 +3006,215 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
         deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
         deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
         // map[l][deamon.y][deamon.x].layer = 30;
-        map[l][deamon.y][deamon.x].signs = 'V';
-        map[l][deamon.y][deamon.x].health = 30;
+        map[l][deamon.y][deamon.x].mnst.sign = 'V';
+        map[l][deamon.y][deamon.x].mnst.hth = 30;
+        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[l][deamon.y][deamon.x].mnst.exist = 1;
+        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
+        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
         break;
     default:
         break;
     }
+    //  deamon
 
+    Pos deamon;
+    int healthpotion = 3;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        // map[l][deamon.y][deamon.x].layer = 30;
+        map[l][deamon.y][deamon.x].mnst.sign = 'V';
+        map[l][deamon.y][deamon.x].mnst.hth = 30;
+        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[l][deamon.y][deamon.x].mnst.exist = 1;
+        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
+        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
+        break;
+    default:
+        break;
+    }
+    //  deamon
 
+    Pos deamon;
+    int healthpotion = 3;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        // map[l][deamon.y][deamon.x].layer = 30;
+        map[l][deamon.y][deamon.x].mnst.sign = 'V';
+        map[l][deamon.y][deamon.x].mnst.hth = 30;
+        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[l][deamon.y][deamon.x].mnst.exist = 1;
+        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
+        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
+        break;
+    default:
+        break;
+    }
+    //  deamon
 
+    Pos deamon;
+    int healthpotion = 3;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        // map[l][deamon.y][deamon.x].layer = 30;
+        map[l][deamon.y][deamon.x].mnst.sign = 'V';
+        map[l][deamon.y][deamon.x].mnst.hth = 30;
+        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[l][deamon.y][deamon.x].mnst.exist = 1;
+        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
+        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
+        break;
+    default:
+        break;
+    }
+    //  deamon
 
+    Pos deamon;
+    int healthpotion = 3;
+    switch(healthpotion){
+    case 0 ... 2:
+        break;
+    case 3:
+        deamon.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        deamon.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        // map[l][deamon.y][deamon.x].layer = 30;
+        map[l][deamon.y][deamon.x].mnst.sign = 'V';
+        map[l][deamon.y][deamon.x].mnst.hth = 30;
+        map[l][deamon.y][deamon.x].mnst.dmg = 5; 
+        map[l][deamon.y][deamon.x].mnst.exist = 1;
+        map[l][deamon.y][deamon.x].mnst.moveable = 1;         
+        map[l][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+        map[l][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;        
+        break;
+    default:
+        break;
+    }
+}
+void mosters_moving_around(int ch){
+    int moved = 1;
+    Enemies temp;
+    for (int ri = 0 ; ri < 44 ; ri++){
+        if(moved){
+            for (int rj = 0 ; rj < 15 ; rj++){
+                if(map[l][rj][ri].mnst.moveable){
+                    if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                        (rj - 1 != g.player.y || ri + 1 != g.player.x)){
+                            if(1){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri + 1].mnst;
+                                map[l][rj - 1][ri + 1].mnst = temp;
+
+                                map[l][rj - 1][ri + 1].mnst.loc.y = rj - 1;
+                                map[l][rj - 1][ri + 1].mnst.loc.x = ri + 1;
+                                moved = 0;
+                                break;
+                            } 
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                        (rj + 1 != g.player.y || ri + 1 != g.player.x)){
+                        if(1){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj + 1][ri + 1].mnst;
+                            map[l][rj + 1][ri + 1].mnst = temp;
+
+                            map[l][rj + 1][ri + 1].mnst.loc.y = rj + 1;
+                            map[l][rj + 1][ri + 1].mnst.loc.x = ri + 1;
+                            moved = 0;
+                            break;
+                        } 
+
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                        (rj + 1 != g.player.y || ri - 1 != g.player.x)){
+                        if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj + 1][ri - 1].mnst;
+                            map[l][rj + 1][ri - 1].mnst = temp;
+
+                            map[l][rj + 1][ri - 1].mnst.loc.y = rj + 1;
+                            map[l][rj + 1][ri - 1].mnst.loc.x = ri - 1;
+                            moved = 0;
+                            break;
+                        }
+                    }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                        (rj - 1 != g.player.y || ri - 1 != g.player.x)){
+                        if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                            temp = map[l][rj][ri].mnst;
+                            map[l][rj][ri].mnst = map[l][rj - 1][ri - 1].mnst;
+                            map[l][rj - 1][ri - 1].mnst = temp;
+
+                            map[l][rj - 1][ri - 1].mnst.loc.y = rj - 1;
+                            map[l][rj - 1][ri - 1].mnst.loc.x = ri - 1;
+                            moved = 0;
+                            break;
+                        } 
+                    }
+                }
+            }            
+        }
+    }
+}
+
+void mosters_doing_damage(){
+    for (int ri = 0 ; ri < 184 ; ri++){
+        for (int rj = 0 ; rj < 45 ; rj++){
+            if(map[l][rj][ri].mnst.exist){
+                if(map[l][rj][ri].mnst.sign == 'V'){
+                    if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
+                        damage += map[l][rj][ri].mnst.dmg;
+                        }
+                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
+                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
+                        damage += map[l][rj][ri].mnst.dmg;
+                    }
+                }
+            }
+        }
+    }
 }
