@@ -28,7 +28,7 @@ typedef struct{
     int one_at_a_time;
     int moved_once;
     int moved;
-    int kind;
+    char kind;
 } Enemies;
 
 typedef struct{
@@ -64,6 +64,8 @@ typedef struct{
     int win;
     Enemies mnst;
     Enemies fire;
+    Enemies giant;
+
 } Map;
 
 typedef struct{
@@ -81,6 +83,8 @@ int First_floor = 1,First_floor_playing=0;
 int Second_floor = 1,Second_floor_playing=0;
 int Third_floor = 1,Third_floor_playing=0;
 int Forth_floor = 1,Forth_floor_playing=0;
+int treasure_Floor = 1, treasure_Floor_playing=0;
+int music_is_not_in_the_back = 1;
 int GAME_STATUS = 1;
 int timer_1 = 0;
 int timer_2 = 0;
@@ -101,6 +105,7 @@ Map map[6][50][184];
 Game g;
 int dim1 =0, dim2 =0;
 int dim3 =0, dim4=0;
+int gennerate_mosters = 1;
 int dimmaster;
 int temp_range;
 int counter_potion_time = 0;
@@ -118,7 +123,7 @@ char *swordd="⚔";
 char *wandd="⚚";
 char *foodd="⛾";
 char *potionn="⚱";
-char *flag = "🏲";
+char *flaggg = "🏲";
 char *apple = "♡";
 
 void welcome_panel();
@@ -174,10 +179,12 @@ void generage_potions_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_weapons_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l);
 
+int are_you_sure_page();
+
 void fill_the_map();
 void handle_movement(int ch, Pos *p);
 void output_massages(int massage);
-void output_massages_target(int massage , int range);
+void output_massages_target(int massage , int range , int rand);
 void draw_player(Game g);
 void draw_rooms();
 void check_room_index();
@@ -188,15 +195,26 @@ void weapon_menu();
 void check_potion_time();
 void check_giant_move_time();
 
+void* musicing();
 void* playMusic(void* arg);
 void* welcomeplayMusic(void* arg);
 void* signinplayMusic(void* arg);
 void* menuplayMusic(void* arg);
+void* firstfloorplayMusic(void* arg);
+void* secondfloorplayMusic(void* arg);
+void* thirdfloorplayMusic(void* arg);
+void* forthfloorplayMusic(void* arg);
+void* treasurefloorplayMusic(void* arg);
+
+
 void check_what_to_play(int l);
 void check_what_to_stop(int l);
 
 void mosters_doing_damage();
-void mosters_moving_around();
+void mosters_moving_around(int ch);
+void giants_moving_around(int ch);
+void undeads_moving_around(int ch);
+
 void unmovable_counter();
 void move_fire_breathing_moster();
 void treasure_layer();
@@ -207,9 +225,6 @@ void Check_winning_or_losing();
 //*********************************************************************************
 int main(){
 
-    pthread_t musicThread;
-    pthread_t welcomemusicThread;
-    pthread_t signinmusicThread;
     setlocale(LC_ALL, "");
 
     initscr();
@@ -225,28 +240,23 @@ int main(){
     curs_set(FALSE);
     keypad(stdscr, TRUE);
 
+    SDL_Init(SDL_INIT_AUDIO);
 
+    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
+    pthread_t welcomemusicThread;
+    pthread_t signinmusicThread;
 
     pthread_create(&welcomemusicThread, NULL, welcomeplayMusic, NULL);    
     welcome_panel();
     pthread_join(welcomemusicThread, NULL);
  
-    // pthread_create(&musicThread, NULL, playMusic, NULL);   
-    // menu = 0;
-    // First_floor=0;Second_floor=0;Third_floor=0;Forth_floor=0;
-    // First_floor=1;    
-    // pthread_join(musicThread, NULL);
-
     pthread_create(&signinmusicThread, NULL, signinplayMusic, NULL);   
     get_player_info(&g);
     pthread_join(signinmusicThread, NULL);
 
-    // get_innitial_values();
 
     while(menu_page(&g)){}
     g.start_time = time(NULL);
-
-    
     check_what_to_play(l);
     while(GAME_STATUS){
         if(in_game)while(menu_page(&g)){};
@@ -256,16 +266,14 @@ int main(){
         draw_player(g);
         draw_hungerbar();
         draw_heathbar();
-
         draw_food_count();
         int ch = getch();
         handle_movement(ch, &g.player);
-
         mosters_moving_around(ch);
+        giants_moving_around(ch);
+        undeads_moving_around(ch);
         mosters_doing_damage();
-
         move_fire_breathing_moster();
-
         refresh();
         clear_massages();
         Check_winning_or_losing();
@@ -311,10 +319,14 @@ void get_innitial_values(){
     g.hand_weapon = 4; 
     g.hunger = 100;
     g.speed = 1;
-    g.magic_wand=10 ;
-    g.arrows=10;
+    g.magic_wand=0 ;
+    g.arrows=0;
     g.dagger=0;
     g.sword=0;
+    g.normal_food=0 ;
+    g.magic_food=0;
+    g.quality_food=0;
+    g.rotenflesh=0;
     g.mace=1;
     damage = 0;
     damageeee = 1;
@@ -668,7 +680,7 @@ int menu_page(Game *g){
     pthread_t menumusicThread;
     menu = 1;
     if(menu_playing == 0){
-        pthread_create(&menumusicThread, NULL, menuplayMusic, NULL);    
+         pthread_create(&menumusicThread, NULL, menuplayMusic, NULL);    
         menu_playing = 1; 
     }
     draw_menu_border();
@@ -704,14 +716,16 @@ int menu_page(Game *g){
 
     switch (choice){
     case 0:
+        pthread_t musicingtread;
         g->games_started += 1;
         in_game = 0;
         menu = 0;
         menu_playing = 0;
-         pthread_join(menumusicThread, NULL);  
-             get_four_levels_rooms();
+            pthread_join(menumusicThread, NULL);  
+            get_four_levels_rooms();
             fill_the_map();
             treasure_layer();
+            // pthread_create(&musicingtread , NULL , musicing , NULL);
       
         clear();
         break;
@@ -734,16 +748,14 @@ int menu_page(Game *g){
     case 5:
         add_to_score_board();
         set_final_values();
-        menu = 0;
-        pthread_join(menumusicThread, NULL); 
-        Mix_CloseAudio();
-        SDL_Quit();
-        mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
-        mvprintw(LINES / 2 - 7, COLS / 2 - 20, "            Are you Sure?          ");
-        mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
-        int ch = getch();
-        endwin();
-        exit(0);
+        if(are_you_sure_page() == 0){
+            menu = 0;
+            pthread_join(menumusicThread, NULL); 
+            Mix_CloseAudio();
+            SDL_Quit();
+            endwin();
+            exit(0);
+        }
         break;
     }
     if(l == 4 && set_playe_position){
@@ -761,21 +773,39 @@ void draw_rooms(){
     for (int j = 2 ; j < 32 ; j++){
         for (int i = 2 ; i < 184 ; i++){
             if(map[l][j][i].flags){
-                if(map[l][j][i].mnst.sign == 'V'){
+                if(map[l][j][i].signs == 'W'){
                     attron(COLOR_PAIR(1));
-                    mvprintw( j , i , "%s" , "s");
+                    mvprintw( j , i , "%s" , flaggg);
                     attroff(COLOR_PAIR(1)); 
                     refresh(); 
-                }   
+                }
+                if(map[l][j][i].mnst.sign == 'V'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "♞");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                }
+                else if(map[l][j][i].mnst.sign == 'U'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "♚");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                }    
+                else if(map[l][j][i].mnst.sign == 'G'){
+                    attron(COLOR_PAIR(5));
+                    mvprintw( j , i , "%s" , "♛");
+                    attroff(COLOR_PAIR(5)); 
+                    refresh(); 
+                }    
                 else if(map[l][j][i].mnst.sign == 'N'){
                     attron(COLOR_PAIR(7));
-                    mvprintw( j , i , "%s" , "D");
+                    mvprintw( j , i , "%s" , "♜");
                     attroff(COLOR_PAIR(7)); 
                     refresh(); 
                 }    
-                else if(map[l][j][i].fire.sign == 'F'){
+                else if(map[l][j][i].mnst.sign == 'F'){
                     attron(COLOR_PAIR(2));
-                    mvprintw( j , i , "%s" , "F");
+                    mvprintw( j , i , "%s" , "☿");
                     attroff(COLOR_PAIR(2)); 
                     refresh(); 
                 }            
@@ -815,6 +845,18 @@ void draw_rooms(){
                 else if(map[l][j][i].signs == 'm'){
                     attron(COLOR_PAIR(1));
                     mvprintw( j , i , "%s" , "♢");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                } 
+                else if(map[l][j][i].signs == 'q'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "♤");
+                    attroff(COLOR_PAIR(1)); 
+                    refresh(); 
+                } 
+                else if(map[l][j][i].signs == 'r'){
+                    attron(COLOR_PAIR(1));
+                    mvprintw( j , i , "%s" , "♲");
                     attroff(COLOR_PAIR(1)); 
                     refresh(); 
                 } 
@@ -860,7 +902,7 @@ void draw_rooms(){
     for (int i = 1 ; i < 183 ; i ++){
         mvprintw(34 , i , "_");
     }
-    for (int j = 35 ; j < 44 ; j ++){
+    for (int j = 35 ; j < 49 ; j ++){
         mvprintw( j, 92 , "|");
     }
     mvprintw(34 , 2 , "Massages");
@@ -1196,6 +1238,7 @@ void Set_game_difficulty(){
     switch (choice){
     case 0:
         difficulty = 6;
+        gennerate_mosters = 2;
         break;
     case 1:
         difficulty = 4;
@@ -1208,6 +1251,7 @@ void Set_game_difficulty(){
         break;
     case 4:
         difficulty = -2000000000;
+        gennerate_mosters = 0;
         break;
     default:
         clear();
@@ -1282,7 +1326,7 @@ void draw_hungerbar(){
         if (healing%4 == 0){
             damage -= 6;
             if (damage < 0) damage = 0;
-            output_massages(20);
+            output_massages(100);
         }
         healing += 1;
         if(healing == 10){
@@ -1426,51 +1470,51 @@ void weapon_menu(){
         if(g.magic_wand > 0){
             g.hand_weapon = 1;
             strcpy(g.hand_weapon_name , levels[choice]);
-            output_massages(20);
+            output_massages(101);
         }
-        else output_massages(20); 
+        else output_massages(102); 
     }
-    else output_massages(20);
+    else output_massages(99);
             break;
     case 1:
     if(g.hand_weapon == 0){
         if(g.arrows > 0){
             g.hand_weapon = 2;
             strcpy(g.hand_weapon_name , levels[choice]);
-            output_massages(20);
+            output_massages(103);
         }
-        else output_massages(20);
+        else output_massages(104);
     }
-    else output_massages(20);
+    else output_massages(99);
             break;
     case 2:
     if(g.hand_weapon == 0){
         if(g.dagger > 0){
             g.hand_weapon = 3;
             strcpy(g.hand_weapon_name , levels[choice]);
-            output_massages(20);
+            output_massages(105);
         }
-        else output_massages(20);
+        else output_massages(106);
     }
-    else output_massages(20);
-//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
+    else output_massages(99);
         break;
     case 3:
     if(g.hand_weapon == 0){
         g.hand_weapon = 4;
         strcpy(g.hand_weapon_name , levels[choice]);
     }
-    else output_massages(20);
+    else output_massages(99);
         break;
     case 4:
     if(g.hand_weapon == 0){
         if(g.sword == 1){
             g.hand_weapon = 5;
             strcpy(g.hand_weapon_name , levels[choice]);
-            output_massages(20);
+            output_massages(107);
             }
+        else output_massages(108);
     }
-    else output_massages(20);
+    else output_massages(99);
             break;
     default:
         clear();
@@ -1521,7 +1565,7 @@ void magic_menu(){
             output_massages(17);
             g.Health_potin -= 1;
         }
-        else output_massages(20);
+        else output_massages(50);
         break;
     case 1:
         if(g.Speed_potion > 0){
@@ -1530,17 +1574,16 @@ void magic_menu(){
             output_massages(18);
             g.Speed_potion -= 1;
         }
-        else output_massages(20);
+        else output_massages(51);
         break;
     case 2:
         if(g.Damage_potion > 0){
-//! ************anva potion ha be nesbat faz 2 kamel shavad*************************************** */
             damageeee = 2;
             on_potions = 1;
             g.Damage_potion -= 1;
-            output_massages(20);
+            output_massages(19);
         }
-        else output_massages(20);
+        else output_massages(52);
         break;
     case 3:
         difficulty = 0;
@@ -1617,36 +1660,52 @@ void food_menu(){
             output_massages(7);
             g.normal_food -= 1;
         }
+        else output_massages (300);
         break;
     case 1:
         if(g.magic_food > 0){
-            elapsed -=12;
+            elapsed -=10;
             damage -= 5;
-            if (elapsed < 0) elapsed = 0;
-            if (elapsed == 0) damage -= 10;
-            if (damage < 0) damage = 0;
+            if (elapsed <= 0) elapsed = 0;
+            if (damage <= 0) damage = 0;
             g.magic_food -= 1;
+            on_potions = 1;
+            healing_speed = 2;
+            output_massages(211); 
         }
+        else output_massages(301);
         break;
     case 2:
         if(g.quality_food > 0){
             elapsed -=22;
             damage -= 3;
             if (elapsed < 0) elapsed = 0;
-            if (elapsed == 0) damage -= 10;
             if (damage < 0) damage = 0;
             g.quality_food -= 1;
+            g.speed = 2;
+            on_potions = 1;
+            output_massages(210);
         }
+        else output_massages(302);
+
         break;
     case 3:
-
-
+        if(g.rotenflesh > 0){
+            elapsed -=5;
+            damage += 7;
+            if (elapsed < 0) elapsed = 0;
+            if (damage < 0) damage = 0;
+            g.rotenflesh -= 1;
+            damageeee = 2;
+            on_potions = 1;
+            output_massages(212);
+        }
+        else output_massages(303);
 
         break;
     default:
         clear();
     }    
-//! ************anva ghaza ha be nesbat faz 2 kamel shavad*************************************** */
     refresh();
 }
 
@@ -1657,7 +1716,7 @@ void handle_movement(int ch, Pos *p ){
         if (map[l][p->y - g.speed][p->x].signs == '<' ){
             
             l++;
-            check_what_to_play(l);
+                        check_what_to_play(l);
             g.player.y = y_1[l][0] + 5;
             g.player.x = x1[l][0] + 5;
             clear();
@@ -1709,7 +1768,9 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y - g.speed][p->x].signs == 'L'|| 
           map[l][p->y - g.speed][p->x].signs == 'A'|| 
           map[l][p->y - g.speed][p->x].signs == 'B'|| 
-          map[l][p->y - g.speed][p->x].signs == 'J'|| 
+          map[l][p->y - g.speed][p->x].signs == 'J'||
+          map[l][p->y - g.speed][p->x].signs == 'q'|| 
+          map[l][p->y - g.speed][p->x].signs == 'r'||  
           map[l][p->y - g.speed][p->x].signs == 'D')
             p->y -= g.speed;
         break;
@@ -1746,6 +1807,8 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y + g.speed][p->x].signs == 'B'||
           map[l][p->y + g.speed][p->x].signs == 'A'||
           map[l][p->y + g.speed][p->x].signs == 'L'||
+          map[l][p->y + g.speed][p->x].signs == 'q'||
+          map[l][p->y + g.speed][p->x].signs == 'r'||
           map[l][p->y + g.speed][p->x].signs == 'D')
             p->y += g.speed;      
         break;
@@ -1783,6 +1846,8 @@ void handle_movement(int ch, Pos *p ){
         map[l][p->y][p->x - g.speed].signs == 'B' ||
         map[l][p->y][p->x - g.speed].signs == 'L' ||
         map[l][p->y][p->x - g.speed].signs == 'A' ||
+        map[l][p->y][p->x - g.speed].signs == 'q' ||
+        map[l][p->y][p->x - g.speed].signs == 'r' ||
         map[l][p->y][p->x - g.speed].signs == 'D' )
             p->x -= g.speed;
         break;
@@ -1822,7 +1887,9 @@ void handle_movement(int ch, Pos *p ){
           map[l][p->y][p->x + g.speed].signs == 'J' ||
           map[l][p->y][p->x + g.speed].signs == 'B' ||
           map[l][p->y][p->x + g.speed].signs == 'A' ||  
-          map[l][p->y][p->x + g.speed].signs == 'L' ||    
+          map[l][p->y][p->x + g.speed].signs == 'L' ||
+          map[l][p->y][p->x + g.speed].signs == 'q' ||  
+          map[l][p->y][p->x + g.speed].signs == 'r' ||     
           map[l][p->y][p->x + g.speed].layer == 80||
         map[l][p->y][p->x + g.speed].signs == '?')
             p->x += g.speed;
@@ -1957,11 +2024,10 @@ void handle_movement(int ch, Pos *p ){
     case '0':
         set_final_values();
         add_to_score_board();
-        mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
-        mvprintw(LINES / 2 - 7, COLS / 2 - 20, "            Are you Sure?          ");
-        mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
-        int ch = getch();
-        in_game = 1;
+        if(are_you_sure_page() == 0) {
+            in_game = 1;
+        }
+        else clear();
         break;
     case 'p':
         switch (map[l][g.player.y][g.player.x].signs){
@@ -1985,6 +2051,22 @@ void handle_movement(int ch, Pos *p ){
                 }
                 else output_massages(9);
                 break;
+            case 'q':
+                if(g.quality_food < 5){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.quality_food += 1;
+                    output_massages(200);
+                }
+                else output_massages(201);
+                break;
+            case 'r':
+                if(g.rotenflesh < 5){
+                    map[l][g.player.y][g.player.x].signs = '.';
+                    g.rotenflesh += 1;
+                    output_massages(202);
+                }
+                else output_massages(203);
+                break;
             case 'm':
                 if(g.magic_food < 5){
                     map[l][g.player.y][g.player.x].signs = '.';
@@ -1998,7 +2080,7 @@ void handle_movement(int ch, Pos *p ){
                     map[l][g.player.y][g.player.x].signs = '.';
                     g.dagger += map[l][g.player.y][g.player.x].count;
                     map[l][g.player.y][g.player.x].count = 0;
-                    output_massages(20);
+                    output_massages(70);
                 }
                 break;
             case 'L':
@@ -2006,7 +2088,7 @@ void handle_movement(int ch, Pos *p ){
                     map[l][g.player.y][g.player.x].signs = '.';
                     g.magic_wand += map[l][g.player.y][g.player.x].count;
                     map[l][g.player.y][g.player.x].count = 0;
-                    output_massages(20);
+                    output_massages(71);
                 }
                 break;
             case 'A':
@@ -2014,7 +2096,7 @@ void handle_movement(int ch, Pos *p ){
                     map[l][g.player.y][g.player.x].signs = '.';
                     g.arrows += map[l][g.player.y][g.player.x].count;
                     map[l][g.player.y][g.player.x].count = 0;
-                    output_massages(20);
+                    output_massages(72);
                 }
                 break;
             case 'B':
@@ -2023,7 +2105,7 @@ void handle_movement(int ch, Pos *p ){
                         map[l][g.player.y][g.player.x].signs = '.';
                         g.sword += map[l][g.player.y][g.player.x].count;
                         map[l][g.player.y][g.player.x].count = 0;
-                        output_massages(20);
+                        output_massages(73);
                     }
                 }
                 break;
@@ -2070,20 +2152,21 @@ void handle_movement(int ch, Pos *p ){
 
     case 'a':
         if(g.hand_weapon == 0){
-            output_massages(20);
+            output_massages(80);
         }
         else if(g.hand_weapon == 4){
             for (int j = -1 ; j <=1 ; j++){
                 for (int i = -1 ; i <= 1 ; i++){
                     if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
                         map[l][g.player.y+j][g.player.x+i].mnst.hth -= 5 * damageeee;
+                        output_massages_target(21 , j , i);
                         if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
                             map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
                             map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
                             map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
-                            output_massages(20);     
+                            output_massages(150);     
                         } 
                     }                    
                 }
@@ -2094,13 +2177,14 @@ void handle_movement(int ch, Pos *p ){
                 for (int i = -1 ; i <= 1 ; i++){
                     if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
                         map[l][g.player.y+j][g.player.x+i].mnst.hth -= 10 * damageeee;
+                        output_massages_target(21 , j , i);
                         if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
                             map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
                             map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
                             map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
-                            output_massages(20);     
+                            output_massages(150);     
                         } 
                     }                    
                 }
@@ -2109,7 +2193,6 @@ void handle_movement(int ch, Pos *p ){
         else if(g.hand_weapon == 3){
             if(g.dagger > 0){
                 g.dagger -= 1;
-
                 int range = 1;
                 int cha = temp_range;
                 switch(cha){
@@ -2122,14 +2205,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
-                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;   
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2149,14 +2236,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2176,14 +2267,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'F' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , 0 , range);     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2203,14 +2298,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , 0 ,range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2224,7 +2323,7 @@ void handle_movement(int ch, Pos *p ){
                         break;
                     }
                 }
-                else output_massages(20);
+                else output_massages(106);
         }
 
         else if(g.hand_weapon == 1){
@@ -2242,15 +2341,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);     
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                            output_massages(150);      
                                 }
                                 break;
                             }
@@ -2270,15 +2373,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2298,15 +2405,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x+range].mnst.sign  == 'F' ||
+                            map[l][g.player.y][g.player.x+range].mnst.sign  == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 ,0, range);     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;  
+                            output_massages(150);   
                                 }
                                 break;
                             }
@@ -2326,15 +2437,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 ,0, range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;                                
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;  
+                            output_massages(150);                                
                                 }
                                 break;
                             }
@@ -2348,7 +2463,7 @@ void handle_movement(int ch, Pos *p ){
                         break;
                     }
                 }
-                else output_massages(20);
+            else output_massages(102);
             }
         else if(g.hand_weapon == 2){
             if(g.arrows > 0){
@@ -2365,14 +2480,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);     
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                            output_massages(150);      
                                 }
                                 break;
                             }
@@ -2381,7 +2500,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y-range + 1][g.player.x].signs = 'A';
                             map[l][g.player.y-range + 1][g.player.x].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break;
                     case KEY_DOWN:
                         for(range; range <= 4 ; range++){
@@ -2392,14 +2510,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign  == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;
+                            output_massages(150);     
                                 }
                                 break;
                             }
@@ -2408,7 +2530,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y+range - 1][g.player.x].signs = 'A';
                             map[l][g.player.y+range - 1][g.player.x].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break;            
                     case KEY_RIGHT:
                         for(range; range <= 4 ; range++){
@@ -2419,14 +2540,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'F' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , 0, range);     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2435,7 +2560,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y][g.player.x+range - 1].signs = 'A';
                             map[l][g.player.y][g.player.x+range - 1].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break; 
                     case KEY_LEFT:
                         for(range; range <= 4 ; range++){
@@ -2446,14 +2570,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 ,0, range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2468,28 +2596,29 @@ void handle_movement(int ch, Pos *p ){
                     }
                 }  
                 else{
-                    output_massages(20);
+                    output_massages(104);
                 }
          
         }     
-            break; 
+            break;
 
     case ' ':
         if(g.hand_weapon == 0){
-            output_massages(20);
+            output_massages(80);
         }
         else if(g.hand_weapon == 4){
             for (int j = -1 ; j <=1 ; j++){
                 for (int i = -1 ; i <= 1 ; i++){
                     if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
                         map[l][g.player.y+j][g.player.x+i].mnst.hth -= 5 * damageeee;
+                        output_massages_target(21 , j , i);
                         if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
                             map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
                             map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
                             map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
-                            output_massages(20);     
+                            output_massages(150);     
                         } 
                     }                    
                 }
@@ -2500,13 +2629,14 @@ void handle_movement(int ch, Pos *p ){
                 for (int i = -1 ; i <= 1 ; i++){
                     if(map[l][g.player.y+j][g.player.x+i].mnst.exist == 1){
                         map[l][g.player.y+j][g.player.x+i].mnst.hth -= 10 * damageeee;
+                        output_massages_target(21 , j , i);
                         if(map[l][g.player.y+j][g.player.x+i].mnst.hth <=0){
                             map[l][g.player.y+j][g.player.x+i].mnst.sign = '.';
                             map[l][g.player.y+j][g.player.x+i].mnst.dmg = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
                             map[l][g.player.y+j][g.player.x+i].mnst.moveable = 0;
                             map[l][g.player.y+j][g.player.x+i].mnst.exist = 0; 
-                            output_massages(20);     
+                            output_massages(150);     
                         } 
                     }                    
                 }
@@ -2528,14 +2658,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
-                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0;   
+                                    map[l][g.player.y-range][g.player.x].mnst.moveable = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2555,14 +2689,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2582,14 +2720,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'F' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , 0 , range);     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2609,14 +2751,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 12 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , 0 ,range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2630,7 +2776,7 @@ void handle_movement(int ch, Pos *p ){
                         break;
                     }
                 }
-                else output_massages(20);
+                else output_massages(106);
         }
 
         else if(g.hand_weapon == 1){
@@ -2649,15 +2795,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);     
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                            output_massages(150);      
                                 }
                                 break;
                             }
@@ -2677,15 +2827,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                            output_massages(150);  
                                 }
                                 break;
                             }
@@ -2705,15 +2859,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x+range].mnst.sign  == 'F' ||
+                            map[l][g.player.y][g.player.x+range].mnst.sign  == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign  == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 ,0, range);     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;  
+                            output_massages(150);   
                                 }
                                 break;
                             }
@@ -2733,15 +2891,19 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 15 * damageeee;
                                 map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 ,0, range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;                                
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;  
+                            output_massages(150);                                
                                 }
                                 break;
                             }
@@ -2755,7 +2917,7 @@ void handle_movement(int ch, Pos *p ){
                         break;
                     }
                 }
-            else output_massages(20);
+            else output_massages(102);
             }
         else if(g.hand_weapon == 2){
             if(g.arrows > 0){
@@ -2773,14 +2935,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y-range][g.player.x].mnst.sign == 'V'||
-                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N'){
+                            map[l][g.player.y-range][g.player.x].mnst.sign == 'N' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'G' ||
+                             map[l][g.player.y-range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y-range][g.player.x].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 , range , 0);     
                                 if(map[l][g.player.y-range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y-range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y-range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y-range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0;     
+                                    map[l][g.player.y-range][g.player.x].mnst.exist = 0; 
+                            output_massages(150);      
                                 }
                                 break;
                             }
@@ -2789,7 +2955,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y-range + 1][g.player.x].signs = 'A';
                             map[l][g.player.y-range + 1][g.player.x].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break;
                     case KEY_DOWN:
                         for(range; range <= 4 ; range++){
@@ -2800,14 +2965,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y+range][g.player.x].mnst.sign == 'V'||
-                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N'){
+                        map[l][g.player.y+range][g.player.x].mnst.sign  == 'N' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'F' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign  == 'G' ||
+                             map[l][g.player.y+range][g.player.x].mnst.sign == 'U'){
                                 map[l][g.player.y+range][g.player.x].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , range , 0);     
                                 if(map[l][g.player.y+range][g.player.x].mnst.hth <=0){
                                     map[l][g.player.y+range][g.player.x].mnst.sign = '.';
                                     map[l][g.player.y+range][g.player.x].mnst.dmg = 0;
                                     map[l][g.player.y+range][g.player.x].mnst.moveable = 0;
-                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;   
+                                    map[l][g.player.y+range][g.player.x].mnst.exist = 0;
+                            output_massages(150);     
                                 }
                                 break;
                             }
@@ -2816,7 +2985,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y+range - 1][g.player.x].signs = 'A';
                             map[l][g.player.y+range - 1][g.player.x].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break;            
                     case KEY_RIGHT:
                         for(range; range <= 4 ; range++){
@@ -2827,14 +2995,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x+range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x+range].mnst.sign == 'N' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'F' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x+range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x+range].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(21 , 0 ,range );     
                                 if(map[l][g.player.y][g.player.x+range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x+range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x+range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x+range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x+range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2843,7 +3015,6 @@ void handle_movement(int ch, Pos *p ){
                             map[l][g.player.y][g.player.x+range - 1].signs = 'A';
                             map[l][g.player.y][g.player.x+range - 1].count += 1;               
                         }
-                        // map[l][g.player.y-range][g.player.x].flags = 2;
                         break; 
                     case KEY_LEFT:
                         for(range; range <= 4 ; range++){
@@ -2854,14 +3025,18 @@ void handle_movement(int ch, Pos *p ){
                                 break;
                             }
                             else if(map[l][g.player.y][g.player.x-range].mnst.sign == 'V'||
-                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N'){
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'N' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'F' ||
+                            map[l][g.player.y][g.player.x-range].mnst.sign == 'G' ||
+                             map[l][g.player.y][g.player.x-range].mnst.sign == 'U'){
                                 map[l][g.player.y][g.player.x-range].mnst.hth -= 5 * damageeee;
-                                output_massages_target(21 , range);     
+                                output_massages_target(24 ,0, range);     
                                 if(map[l][g.player.y][g.player.x-range].mnst.hth <=0){
                                     map[l][g.player.y][g.player.x-range].mnst.sign = '.';
                                     map[l][g.player.y][g.player.x-range].mnst.dmg = 0;
                                     map[l][g.player.y][g.player.x-range].mnst.moveable = 0;
-                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0;   
+                                    map[l][g.player.y][g.player.x-range].mnst.exist = 0; 
+                            output_massages(150);    
                                 }
                                 break;
                             }
@@ -2876,11 +3051,12 @@ void handle_movement(int ch, Pos *p ){
                     }
                 }  
                 else{
-                    output_massages(20);
+                    output_massages(104);
                 }
          
         }     
-            break; 
+            break;
+
 
         default:
             break;
@@ -2910,14 +3086,19 @@ void clear_massages(){
         timer_1 = 0;
         output_massages(0);
     }
+        timer_2 ++;
+    if (timer_2 == 14){
+        timer_2 = 0;
+        output_massages_target(0 ,0 , 0);
+    }
 }
 
 void output_massages(int massage){
     switch(massage){
         case 0:
-            mvprintw(36 , 2 , "                                        ");
-            mvprintw(37 , 2 , "                                        ");
-            mvprintw(38 , 2 , "                                        ");
+            mvprintw(36 , 2 , "                                                          ");
+            mvprintw(37 , 2 , "                                                          ");
+            mvprintw(38 , 2 , "                                                          ");
             break;
         case 1:
             output_massages(0);
@@ -2945,7 +3126,7 @@ void output_massages(int massage){
         case 5:
             output_massages(0);
             mvprintw(36 , 2 , "You've Picked up Magical Food           ");
-            mvprintw(37 , 2 , "Total Magical Food: %d                 " , g.magic_food * 6);
+            mvprintw(37 , 2 , "Total Magical Food: %d                 " , g.magic_food );
             timer_1 = 0;
             break;
         case 6:
@@ -3011,29 +3192,236 @@ void output_massages(int massage){
             break;
         case 16:
             output_massages(0);
-            mvprintw(36 , 2 , "You've Picked up Damge Potion           ");
+            mvprintw(36 , 2 , "You've Picked up Damage Potion           ");
             mvprintw(37 , 2 , "Total Damage Potions: %d                 " , g.Damage_potion);
             timer_1 = 0;
             break;
-        case 20:
+        case 17:
             output_massages(0);
-            mvprintw(36 , 2 , "NEed to be filled bothing is there           ");
-            mvprintw(37 , 2 , "NA NAN ANNAN AN NAN NAN NN NANN NAN A            ");
+            mvprintw(36 , 2 , "You've drank a Heath Potion you found on the Ground");
+            mvprintw(37 , 2 , "Your Wounds are fading away");
+            mvprintw(38 , 2 , "Total Health Potions: %d                 " , g.Health_potin);
+            timer_1 = 0;
+            break;   
+        case 18:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've drank a Speed Potion you found on the Ground");
+            mvprintw(37 , 2 , "Your Feets are Rushing with Energy");
+            mvprintw(38 , 2 , "Total Speed Potions: %d                 " , g.Speed_potion);
             timer_1 = 0;
             break;
+        case 19:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've drank a Damage Potion you found on the Ground");
+            mvprintw(37 , 2 , "You Feel the energy of Kratus in your vains");
+            mvprintw(38 , 2 , "Total Damage Potions: %d                 " , g.Damage_potion);
+            timer_1 = 0;
+            break;           
+        case 20:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've been Hit and are now Wounded           ");
+            mvprintw(37 , 2 , "Current Health at: %d            " , 100 - damage);
+            timer_1 = 0;
+            break;
+        case 50:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Health Potions Left to use            ");
+            mvprintw(37 , 2 , "Geuss you'll just have to endure the pain          ");
+            timer_1 = 0;
+            break;
+        case 51:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Speed Potions Left to use            ");
+            mvprintw(37 , 2 , "And the mosters are closing in Fast              ");
+            timer_1 = 0;
+            break;
+        case 52:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Damage Potions Left to use            ");
+            mvprintw(37 , 2 , "You have to use your Inner Strength             ");
+            timer_1 = 0;
+            break;
+        case 70:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Found Throwing Daggers on the ground            ");
+            mvprintw(37 , 2 , "Total Throwing Daggers: %d                       " , g.dagger);
+            timer_1 = 0;
+            break;
+        case 71:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Found Aura left on the ground               ");
+            mvprintw(37 , 2 , "Total Aura count: %d                            " , g.magic_wand);
+            timer_1 = 0;
+            break;
+        case 72:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Found Arrows for the Bow you Brought                  ");
+            mvprintw(37 , 2 , "Total Arrows count: %d                           " , g.arrows);
+            timer_1 = 0;
+            break;
+        case 73:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Found a Cool Iron Sword, Geuss it's yours then     ");
+            mvprintw(37 , 2 , "Now you can Throw away that useless Mace               ");
+            timer_1 = 0;
+            break;
+        case 80:
+            output_massages(0);
+            mvprintw(36 , 2 , "your not Mike Tyson, Your Fists can not damage this mosters");
+            mvprintw(37 , 2 , "Choose a Weapon from your Backpack");
+            timer_1 = 0;
+            break;
+        case 99:
+            output_massages(0);
+            mvprintw(36 , 2 , "Your hands are full with another weapon           ");
+            mvprintw(37 , 2 , "Put your current Weapon in your backpack by 'B'      ");
+            timer_1 = 0;
+            break; 
 
+        case 100:
+            output_massages(0);
+            mvprintw(36 , 2 , "You are being healed my the Health potion           ");
+            mvprintw(37 , 2 , "Current health at: %d               " , 100 - damage);
+            timer_1 = 0;
+            break;
+        case 101:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Changed your weapon to Magic Wand           ");
+            mvprintw(37 , 2 , "Current inventory at: %d               " , g.magic_wand);
+            timer_1 = 0;
+            break;
+        case 102:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Aura Left to use Magic Wand           ");
+            mvprintw(37 , 2 , "Aura can be found on the ground                     ");
+            timer_1 = 0;
+            break;
+        case 103:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Changed your weapon to Bow & Arrows           ");
+            mvprintw(37 , 2 , "Current inventory at: %d               " , g.arrows);
+            timer_1 = 0;
+            break;
+        case 104:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Arrow Left to use your Bow             ");
+            mvprintw(37 , 2 , "Arrows can be found on the ground                   ");
+            timer_1 = 0;
+            break;     
+        case 105:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Changed your weapon to Throwing Daggers          ");
+            mvprintw(37 , 2 , "Current inventory at: %d               " , g.dagger);
+            timer_1 = 0;
+            break;
+        case 106:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Have no Dagger left to Throw             ");
+            mvprintw(37 , 2 , "Daggers can be found on the ground                   ");
+            timer_1 = 0;
+            break;
+        case 107:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Changed your weapon to Iron Sword           ");
+            timer_1 = 0;
+            break;  
+        case 108:
+            output_massages(0);
+            mvprintw(36 , 2 , "You Haven't found a Sword Yet                     ");
+            mvprintw(37 , 2 , "Guess the \"Old Merchant\" was lying               ");
+            timer_1 = 0;
+            break;
+        case 150:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Killed a Moster                            ");
+            mvprintw(37 , 2 , "Who's the Moster now?                            ");
+            timer_1 = 0;
+            break;
+        case 200:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Picked up Quality Food            ");
+            mvprintw(37 , 2 , "Total Quality Food: %d                  " , g.quality_food);
+            timer_1 = 0;
+            break;
+        case 201:
+            output_massages(0);
+            mvprintw(36 , 2 , "Your Quality Food inventory is full      ");
+            timer_1 = 0;
+            break; 
+        case 202:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Picked up Rotten Flesh               ");
+            mvprintw(37 , 2 , "Total Rotten Flesh: %d                      " , g.rotenflesh);
+            timer_1 = 0;
+            break;
+        case 203:
+            output_massages(0);
+            mvprintw(36 , 2 , "Your Rotten Flesh inventory is full          ");
+            timer_1 = 0;
+            break; 
+        case 210:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Eaten Quality Food                      ");
+            mvprintw(37 , 2 , "Your feet feels energetic, Your Speed has increased    ");
+            timer_1 = 0;
+            break; 
+        case 211:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Eaten Magical Food                      ");
+            mvprintw(37 , 2 , "You feel Your wounds slowly fading away         ");
+            timer_1 = 0;
+            break;
+        case 212:
+            output_massages(0);
+            mvprintw(36 , 2 , "You've Eaten Rotten Flesh                      ");
+            mvprintw(37 , 2 , "You feel sick after eating But the taste Makes you ANGRY");
+            timer_1 = 0;
+            break;  
+        case 300:
+            output_massages(0);
+            mvprintw(36 , 2 , "You have no Normal Food Left in Your Backpack       ");
+            timer_1 = 0;
+            break; 
+        case 301:
+            output_massages(0);
+            mvprintw(36 , 2 , "You have no Magical Food Left Your Backpack         ");
+            timer_1 = 0;
+            break;                  
+        case 302:
+            output_massages(0);
+            mvprintw(36 , 2 , "You have no Quality Food Left Your Backpack         ");
+            timer_1 = 0;
+            break; 
+        case 303:
+            output_massages(0);
+            mvprintw(36 , 2 , "You're out of Rotten Flesh                          ");
+            mvprintw(37 , 2 , "Who eats Rotten Flesh anyways?                       ");
+            timer_1 = 0;
+            break; 
         default:
             break;
     }
 }
-void output_massages_target(int massage , int range){
+void output_massages_target(int massage , int j , int i){
     switch(massage){
-        case 21:
-            output_massages(0);
-            mvprintw(36 , 2 , "You've hit a Deamon                           ");
-            mvprintw(37 , 2 , "Deamon's Health at %d                         " ,map[l][g.player.y-range][g.player.x].mnst.hth );
-            timer_1 = 0;
+        case 0:
+            mvprintw(39 , 2 , "                                              ");
+            mvprintw(40 , 2 , "                                              ");
+            timer_2 = 0;
             break;
+        case 21:
+            output_massages_target(0 ,0 ,0 );
+            mvprintw(39 , 2 , "You've hit a Moster                           ");
+            mvprintw(40 , 2 , "Moster's Health at %d                         " ,map[l][g.player.y+j][g.player.x+i].mnst.hth );
+            timer_2 = 0;
+            break;
+        case 24:
+            output_massages_target(0 , 0, 0);
+            mvprintw(39 , 2 , "You've hit a Moster                           ");
+            mvprintw(40 , 2 , "Moster's Health at %d                         " ,map[l][g.player.y-j][g.player.x-i].mnst.hth );
+            timer_2 = 0;
+            break;
+ 
         default:
             break;
     }
@@ -3041,80 +3429,133 @@ void output_massages_target(int massage , int range){
 
 /****************************************************************/
 void* welcomeplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
     Mix_Music* welcome_music = Mix_LoadMUS("Welcome.mp3");
     Mix_PlayMusic(welcome_music,1);
-    while(welcome) {}
+    while(welcome) { SDL_Delay(80);}
     Mix_FreeMusic(welcome_music);
     return NULL;
 }
 void* signinplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
     Mix_Music* menu_music = Mix_LoadMUS("Signin.mp3");
     Mix_PlayMusic(menu_music,-1);
-    while(signin) {}
+    while(signin) {SDL_Delay(80);}
     Mix_FreeMusic(menu_music);
     return NULL;
 }
 void* menuplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
     Mix_Music* menu_music = Mix_LoadMUS("Menu.mp3");
     Mix_PlayMusic(menu_music,-1);
-    while(menu) {}
+    while(menu) {SDL_Delay(80);}
     Mix_FreeMusic(menu_music);
     return NULL;
 }
+
+// void* musicing(){
+//     pthread_t floormusicThread;
+//     Mix_Music* First_floor_music = Mix_LoadMUS("1_floor.mp3");
+//     Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
+//     Mix_Music* Third_floor_music = Mix_LoadMUS("3_floor.mp3");
+//     Mix_Music* Forth_floor_music = Mix_LoadMUS("4_floor.mp3");
+//     Mix_Music* Treasure_floor_music = Mix_LoadMUS("5_floor.mp3");
+//     while(1){
+//         if(music_is_not_in_the_back){
+//             Third_floor=1;
+//             First_floor=1;
+//             Second_floor=1;
+//             Forth_floor=1;
+//             treasure_Floor=1;
+//             switch(l){
+//                 case 0:
+//                     Mix_PlayMusic(First_floor_music,-1);
+//                     while(First_floor) {SDL_Delay(80);}
+//                     Mix_FreeMusic(First_floor_music);
+//                         music_is_not_in_the_back = 0;    
+
+//                     break;
+//                 case 1:
+
+//                     Mix_PlayMusic(Second_floor_music,-1);
+//                     while(Second_floor) {SDL_Delay(80);}
+//                     Mix_FreeMusic(Second_floor_music);
+//                         music_is_not_in_the_back = 0;
+//                                 break;
+//                 case 2:
+//                     Mix_PlayMusic(Third_floor_music,-1);
+//                     while(Third_floor) {SDL_Delay(80);}
+//                     Mix_FreeMusic(Third_floor_music);
+//                     music_is_not_in_the_back = 0;  
+
+//                                 break;
+//                 case 3:
+//                     Mix_PlayMusic(Forth_floor_music,-1);
+//                     while(Forth_floor) {SDL_Delay(80);}
+//                     Mix_FreeMusic(Forth_floor_music);
+//                         music_is_not_in_the_back = 0;
+
+//                                 break;
+//                 case 4:
+
+//                     Mix_PlayMusic(Treasure_floor_music,-1);
+//                     while(treasure_Floor) {SDL_Delay(80);}
+//                     Mix_FreeMusic(Treasure_floor_music);
+//                         music_is_not_in_the_back = 0;
+
+//                                 break;
+//                 default:
+//                     break;
+//             }
+//         }
+//     }
+// }
 void* firstfloorplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
     Mix_Music* First_floor_music = Mix_LoadMUS("1_floor.mp3");
     Mix_PlayMusic(First_floor_music,-1);
-    while(First_floor) {}
+    while(First_floor) {SDL_Delay(80);}
     Mix_FreeMusic(First_floor_music);
     return NULL;
 }
 void* secondfloorplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
     Mix_Music* Second_floor_music = Mix_LoadMUS("2_floor.mp3");
     Mix_PlayMusic(Second_floor_music,-1);
-    while(Second_floor) {}
+    while(Second_floor) {SDL_Delay(80);}
     Mix_FreeMusic(Second_floor_music);
     return NULL;
 }
 void* thirdfloorplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
-    Mix_Music* Second_floor_music = Mix_LoadMUS("3_floor.mp3");
-    Mix_PlayMusic(Second_floor_music,-1);
-    while(Second_floor) {}
-    Mix_FreeMusic(Second_floor_music);
+    Mix_Music* Third_floor_music = Mix_LoadMUS("3_floor.mp3");
+    Mix_PlayMusic(Third_floor_music,-1);
+    while(Third_floor) {SDL_Delay(80);}
+    Mix_FreeMusic(Third_floor_music);
     return NULL;
 }
 void* forthfloorplayMusic(void* arg){
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048);
-    
+
     // Load the music file
-    Mix_Music* Second_floor_music = Mix_LoadMUS("4_floor.mp3");
-    Mix_PlayMusic(Second_floor_music,-1);
-    while(Second_floor) {}
-    Mix_FreeMusic(Second_floor_music);
+    Mix_Music* Forth_floor_music = Mix_LoadMUS("4_floor.mp3");
+    Mix_PlayMusic(Forth_floor_music,-1);
+    while(Forth_floor) {SDL_Delay(80);}
+    Mix_FreeMusic(Forth_floor_music);
+    return NULL;
+}
+void* treasurefloorplayMusic(void* arg){
+
+    // Load the music file
+    Mix_Music* Treasure_floor_music = Mix_LoadMUS("5_floor.mp3");
+    Mix_PlayMusic(Treasure_floor_music,-1);
+    while(treasure_Floor) {SDL_Delay(80);}
+    Mix_FreeMusic(Treasure_floor_music);
     return NULL;
 }
 void check_what_to_play(int l){
@@ -3125,77 +3566,36 @@ void check_what_to_play(int l){
     pthread_t floormusicThread;
     switch(l){
         case 0:
-            // First_floor = 1;
-            // if(menu_playing == 0){
+
                 pthread_create(&floormusicThread, NULL, firstfloorplayMusic, NULL);    
-            //     First_floor_playing = 1; 
-            // }
+
             break;
         case 1:
-            // Second_floor = 1;
-            // if(menu_playing == 0){
+
                 pthread_create(&floormusicThread, NULL, secondfloorplayMusic, NULL);    
-               // Second_floor_playing = 1; 
-            //}
+
                         break;
         case 2:
-            //Third_floor = 1;
-            //if(menu_playing == 0){
+
                 pthread_create(&floormusicThread, NULL, thirdfloorplayMusic, NULL);    
-                //Third_floor_playing = 1; 
-            //}
+
                         break;
         case 3:
-            //Forth_floor = 1;
-            //if(menu_playing == 0){
+
                 pthread_create(&floormusicThread, NULL, forthfloorplayMusic, NULL);    
-                //Forth_floor_playing = 1; 
-            //}
+
+                        break;
+        case 4:
+
+                pthread_create(&floormusicThread, NULL, treasurefloorplayMusic, NULL);    
+
                         break;
         default:
             break;
     }
 }
-void check_what_to_stop_down(int l){
-    First_floor_playing=0;
-    Second_floor_playing=0;
-    Third_floor_playing=0;
-    Forth_floor_playing=0;
-    pthread_t floormusicThread;
-    switch(l){
-        case 0:
-            // First_floor = 1;
-            // if(menu_playing == 0){
-                pthread_join(floormusicThread, NULL);    
-            //     First_floor_playing = 1; 
-            // }
-            break;
-        case 1:
-            // Second_floor = 1;
-            // if(menu_playing == 0){
-                pthread_join(floormusicThread, NULL);    
-               // Second_floor_playing = 1; 
-            //}
-                        break;
-        case 2:
-            //Third_floor = 1;
-            //if(menu_playing == 0){
-                pthread_join(floormusicThread, NULL);    
-                //Third_floor_playing = 1; 
-            //}
-                        break;
-        case 3:
-            //Forth_floor = 1;
-            //if(menu_playing == 0){
-                pthread_join(floormusicThread, NULL);    
-                //Forth_floor_playing = 1; 
-            //}
-                        break;
-        default:
-            break;
-    }
-}
-                         
+
+
 void back_ground_sky(){
 char background[10][200][200]=
 {{{"  *                                                                          .                                                                      .          |           '       o  "},
@@ -3530,6 +3930,8 @@ void generage_gold_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
 void generage_food_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     int chance =rand()%5;
     int magicfood = rand()%5;
+    int Qualityfood = rand()%5;
+    int FottenFlesh = rand()%5;
     Pos food_1 , food_2 , food_3;
     Pos magicfood_1;
     Pos qualityfood_1;
@@ -3573,6 +3975,24 @@ void generage_food_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
         default :
             break;
     }   
+    switch(Qualityfood){
+        case 1:
+        qualityfood_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        qualityfood_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        map[l][qualityfood_1.y][qualityfood_1.x].signs = 'q';
+            break;
+        default :
+            break;
+    } 
+    switch(FottenFlesh){
+        case 1:
+        rotenflesh_1.x = rand()%(x2 - x1 - 1) + x1 + 1;
+        rotenflesh_1.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+        map[l][rotenflesh_1.y][rotenflesh_1.x].signs = 'r';
+            break;
+        default :
+            break;
+    } 
 }
 void fill_the_map(){  
     for(int l = 0 ; l < 4 ; l++){
@@ -3793,7 +4213,11 @@ void fill_the_map(){
         generage_pillars_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l); 
         generage_potions_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
         generage_weapons_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
-        generage_enemies_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
+        if(gennerate_mosters){
+            for(int opop = 0 ; opop < gennerate_mosters ; opop++){
+                generage_enemies_int_map(x1[l][r],x2[l][r],y_1[l][r],y2[l][r],l);
+            }
+        }
             if(r==3 && l!= 3){
                 map[l][y2[l][r] - 2][x1[l][r] + 4].signs = '<';
             }
@@ -3960,17 +4384,6 @@ void check_room_index(){
             }
         }
     }
-        // if(moster_flag){
-        //     moster_counter += 1;
-        //     if(moster_counter == 5){
-        //         moster_flag = 0;
-        //         for(int i = 0 ; i < 184 ; i++){
-        //             for(int j = 0 ; j < 45 ; j++){
-        //                 map[l][j][i].mnst.moveable = 0;
-        //             }
-        //         }
-        //     }
-        // }
 }
 
 void Check_winning_or_losing(){
@@ -3980,9 +4393,11 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
+        mvprintw(LINES / 2 - 9, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "              Game Over            ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
+        mvprintw(LINES / 2 - 5, COLS / 2 - 20, "                                   ");
         refresh();
         refresh();
         in_game = 1;
@@ -3994,9 +4409,11 @@ void Check_winning_or_losing(){
         add_to_score_board();
         back_ground_sky();
         draw_menu_border();
+        mvprintw(LINES / 2 - 9, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 8, COLS / 2 - 20, "                                   ");
         mvprintw(LINES / 2 - 7, COLS / 2 - 20, "               You Won             ");
         mvprintw(LINES / 2 - 6, COLS / 2 - 20, "                                   ");
+        mvprintw(LINES / 2 - 5, COLS / 2 - 20, "                                   ");
         refresh();
         refresh();
         int ch = getch();
@@ -4008,7 +4425,7 @@ void Check_winning_or_losing(){
 void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
 
     //Deamon
-    int num = rand()%4;
+    int num = rand()%6;
     for (int u = 0 ; u < num ; u++){
         Pos deamon;
         int healthpotion = 3;
@@ -4034,8 +4451,9 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     }    
    
     //Fire monster
-    for(int y = 0 ; y <= 1; y++){
-        num = rand()%4;
+    int chann = (rand()%2) + 1;
+    for(int y = 0 ; y <= chann; y++){
+        num = rand()%3;
         for (int u = 0 ; u < num ; u++){
             Pos fire;
             int healthpotion = 3;
@@ -4046,14 +4464,15 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
                 fire.x = rand()%(x2 - x1 - 5) + x1 + 4;
                 fire.y = rand()%(y2 - y_1 - 5) + y_1 + 3;
 
-                map[l][fire.y][fire.x].fire.sign = 'F';
-                map[l][fire.y][fire.x].fire.hth = 10;
-                map[l][fire.y][fire.x].fire.dmg = 5; 
-                map[l][fire.y][fire.x].fire.exist = 1;
-                map[l][fire.y][fire.x].fire.moveable = 0;  
-                map[l][fire.y][fire.x].fire.kind = 2;        
-                map[l][fire.y][fire.x].fire.loc.x =  fire.x ;  
-                map[l][fire.y][fire.x].fire.loc.y =  fire.y ;    
+                map[l][fire.y][fire.x].mnst.sign = 'F';
+                map[l][fire.y][fire.x].mnst.hth = 10;
+                map[l][fire.y][fire.x].mnst.dmg = 5; 
+                map[l][fire.y][fire.x].mnst.exist = 1;
+                map[l][fire.y][fire.x].mnst.moveable = 0;  
+                map[l][fire.y][fire.x].mnst.moved_once = 0;
+                map[l][fire.y][fire.x].mnst.kind = 2;        
+                map[l][fire.y][fire.x].mnst.loc.x =  fire.x ;  
+                map[l][fire.y][fire.x].mnst.loc.y =  fire.y ;    
                 break;
 
             default:
@@ -4063,8 +4482,28 @@ void generage_enemies_int_map(int x1 , int x2 , int y_1 , int y2 ,int l){
     }
 
 
+    //giant
+    int chan = rand()%5;
+    if(chan == 3 || chan == 2){
+        Pos Giant;
+            Giant.x = rand()%(x2 - x1 - 4) + x1 + 3;
+            Giant.y = rand()%(y2 - y_1 - 4) + y_1 + 3;
+            map[l][Giant.y][Giant.x].mnst.sign = 'G';
+            map[l][Giant.y][Giant.x].mnst.hth = 25;
+            map[l][Giant.y][Giant.x].mnst.dmg = 8; 
+            map[l][Giant.y][Giant.x].mnst.exist = 1;
+            map[l][Giant.y][Giant.x].mnst.kind = 'G';  
+            map[l][Giant.y][Giant.x].mnst.moved_once = 0; 
+            map[l][Giant.y][Giant.x].mnst.move_amount = 0;                     
+            map[l][Giant.y][Giant.x].mnst.moveable = 0;         
+            map[l][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
+            map[l][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
+    }
+
     //  Snakk
-if( x1 > 0 && x1 < 40 && y_1 > 0 && y_1 < 15){
+    if( x1 > 0 && x1 < 40 && y_1 > 0 && y_1 < 15 ||
+     x1 > 40 && x1 < 85 && y_1 > 15 && y_1 < 30 ||
+      x1 > 130 && x1 < 184 && y_1 > 0 && y_1 < 15 ){
         Pos Giant;
         int healthpotion = 3;
         switch(healthpotion){
@@ -4077,6 +4516,7 @@ if( x1 > 0 && x1 < 40 && y_1 > 0 && y_1 < 15){
             map[l][Giant.y][Giant.x].mnst.hth = 20;
             map[l][Giant.y][Giant.x].mnst.dmg = 5; 
             map[l][Giant.y][Giant.x].mnst.exist = 1;
+            map[l][Giant.y][Giant.x].mnst.moved_once = 0;
             map[l][Giant.y][Giant.x].mnst.moveable = 0;         
             map[l][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
             map[l][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
@@ -4086,6 +4526,316 @@ if( x1 > 0 && x1 < 40 && y_1 > 0 && y_1 < 15){
         }
     }
 
+    //Undead
+     int chans = rand()%5;
+    if(chans == 3 || chans == 2){
+        Pos Giant;
+        int healthpotion = 3;
+        switch(healthpotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            Giant.x = rand()%(x2 - x1 - 1) + x1 + 1;
+            Giant.y = rand()%(y2 - y_1 - 1) + y_1 + 1;
+            map[l][Giant.y][Giant.x].mnst.sign = 'U';
+            map[l][Giant.y][Giant.x].mnst.hth = 30;
+            map[l][Giant.y][Giant.x].mnst.dmg = 8; 
+            map[l][Giant.y][Giant.x].mnst.exist = 1;
+            map[l][Giant.y][Giant.x].mnst.kind = 'U';  
+            map[l][Giant.y][Giant.x].mnst.moved_once = 0; 
+            map[l][Giant.y][Giant.x].mnst.move_amount = 0;                     
+            map[l][Giant.y][Giant.x].mnst.moveable = 0;         
+            map[l][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
+            map[l][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
+            break;
+        default:
+            break;
+        }
+    }   
+}
+void undeads_moving_around(int ch){
+    int moved = 1;
+    Enemies temp;
+    int how_many_mosters = 0;
+    int which_moster_x[45];
+    int which_moster_y[45];
+    int rj;
+    int ri;
+    for (int ri = 0 ; ri < 184 ; ri++){
+        for (int rj = 0 ; rj < 45 ; rj++){
+            if(map[l][rj][ri].mnst.kind == 'U') {  
+                if(map[l][rj][ri].mnst.moveable){
+                    which_moster_y[how_many_mosters] = rj;
+                    which_moster_x[how_many_mosters] = ri;
+                    how_many_mosters += 1;
+                }
+                if(moved){
+                    if(map[l][rj][ri].mnst.moveable){
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj - 1 != g.player.y || ri + 1 != g.player.x)){
+                                if(map[l][rj][ri].mnst.move_amount <= 12){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj - 1][ri + 1].mnst;
+                                    map[l][rj - 1][ri + 1].mnst = temp;
+
+                                    map[l][rj - 1][ri + 1].mnst.loc.y = rj - 1;
+                                    map[l][rj - 1][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj + 1 != g.player.y || ri + 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri + 1].mnst;
+                                map[l][rj + 1][ri + 1].mnst = temp;
+
+                                map[l][rj + 1][ri + 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri + 1].mnst.loc.x = ri + 1;
+                                moved = 0;
+                                break;
+                            } 
+
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj + 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri - 1].mnst;
+                                map[l][rj + 1][ri - 1].mnst = temp;
+
+                                map[l][rj + 1][ri - 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj - 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                                 map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri - 1].mnst;
+                                map[l][rj - 1][ri - 1].mnst = temp;
+
+                                map[l][rj - 1][ri - 1].mnst.loc.y = rj - 1;
+                                map[l][rj - 1][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            } 
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (ri + 1 != g.player.x)){
+                                if(map[l][rj][ri].mnst.move_amount <= 12){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj][ri + 1].mnst;
+                                    map[l][rj][ri + 1].mnst = temp;
+
+                                    map[l][rj][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj][ri - 1].mnst;
+                                map[l][rj][ri - 1].mnst = temp;
+
+                                map[l][rj][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            } 
+
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj + 1 != g.player.y)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12){
+                                map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri].mnst;
+                                map[l][rj + 1][ri].mnst = temp;
+
+                                map[l][rj + 1][ri].mnst.loc.y = rj + 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj - 1 != g.player.y)){
+                            if(map[l][rj][ri].mnst.move_amount <= 12){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri].mnst;
+                                map[l][rj - 1][ri].mnst = temp;
+
+                                map[l][rj - 1][ri].mnst.loc.y = rj - 1;
+                                moved = 0;
+                                break;
+                            } 
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+void giants_moving_around(int ch){
+    int moved = 1;
+    Enemies temp;
+    int how_many_mosters = 0;
+    int which_moster_x[45];
+    int which_moster_y[45];
+    int rj;
+    int ri;
+    for (int ri = 0 ; ri < 184 ; ri++){
+        for (int rj = 0 ; rj < 45 ; rj++){
+            if(map[l][rj][ri].mnst.kind == 'G') {  
+                if(map[l][rj][ri].mnst.moveable){
+                    which_moster_y[how_many_mosters] = rj;
+                    which_moster_x[how_many_mosters] = ri;
+                    how_many_mosters += 1;
+                }
+                if(moved){
+                    if(map[l][rj][ri].mnst.moveable){
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj - 1 != g.player.y || ri + 1 != g.player.x)){
+                                if(map[l][rj][ri].mnst.move_amount <= 9){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj - 1][ri + 1].mnst;
+                                    map[l][rj - 1][ri + 1].mnst = temp;
+
+                                    map[l][rj - 1][ri + 1].mnst.loc.y = rj - 1;
+                                    map[l][rj - 1][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj + 1 != g.player.y || ri + 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri + 1].mnst;
+                                map[l][rj + 1][ri + 1].mnst = temp;
+
+                                map[l][rj + 1][ri + 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri + 1].mnst.loc.x = ri + 1;
+                                moved = 0;
+                                break;
+                            } 
+
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj + 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri - 1].mnst;
+                                map[l][rj + 1][ri - 1].mnst = temp;
+
+                                map[l][rj + 1][ri - 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj - 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                                 map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri - 1].mnst;
+                                map[l][rj - 1][ri - 1].mnst = temp;
+
+                                map[l][rj - 1][ri - 1].mnst.loc.y = rj - 1;
+                                map[l][rj - 1][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            } 
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (ri + 1 != g.player.x)){
+                                if(map[l][rj][ri].mnst.move_amount <= 9){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj][ri + 1].mnst;
+                                    map[l][rj][ri + 1].mnst = temp;
+
+                                    map[l][rj][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (ri - 1 != g.player.x)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj][ri - 1].mnst;
+                                map[l][rj][ri - 1].mnst = temp;
+
+                                map[l][rj][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            } 
+
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj + 1 != g.player.y)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9){
+                                map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri].mnst;
+                                map[l][rj + 1][ri].mnst = temp;
+
+                                map[l][rj + 1][ri].mnst.loc.y = rj + 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj - 1 != g.player.y)){
+                            if(map[l][rj][ri].mnst.move_amount <= 9){
+                                    map[l][rj][ri].mnst.move_amount += 1;
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri].mnst;
+                                map[l][rj - 1][ri].mnst = temp;
+
+                                map[l][rj - 1][ri].mnst.loc.y = rj - 1;
+                                moved = 0;
+                                break;
+                            } 
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 void mosters_moving_around(int ch){
     int moved = 1;
@@ -4097,122 +4847,124 @@ void mosters_moving_around(int ch){
     int ri;
     for (int ri = 0 ; ri < 184 ; ri++){
         for (int rj = 0 ; rj < 45 ; rj++){
-            if(map[l][rj][ri].mnst.moveable){
-                which_moster_y[how_many_mosters] = rj;
-                which_moster_x[how_many_mosters] = ri;
-                how_many_mosters += 1;
-            }
-            if(moved){
+            if(map[l][rj][ri].mnst.sign == 'V'){
                 if(map[l][rj][ri].mnst.moveable){
-                    if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
-                        (rj - 1 != g.player.y || ri + 1 != g.player.x)){
+                    which_moster_y[how_many_mosters] = rj;
+                    which_moster_x[how_many_mosters] = ri;
+                    how_many_mosters += 1;
+                }
+                if(moved){
+                    if(map[l][rj][ri].mnst.moveable){
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj - 1 != g.player.y || ri + 1 != g.player.x)){
+                                if(1){
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj - 1][ri + 1].mnst;
+                                    map[l][rj - 1][ri + 1].mnst = temp;
+
+                                    map[l][rj - 1][ri + 1].mnst.loc.y = rj - 1;
+                                    map[l][rj - 1][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (rj + 1 != g.player.y || ri + 1 != g.player.x)){
                             if(1){
                                 temp = map[l][rj][ri].mnst;
-                                map[l][rj][ri].mnst = map[l][rj - 1][ri + 1].mnst;
-                                map[l][rj - 1][ri + 1].mnst = temp;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri + 1].mnst;
+                                map[l][rj + 1][ri + 1].mnst = temp;
 
-                                map[l][rj - 1][ri + 1].mnst.loc.y = rj - 1;
-                                map[l][rj - 1][ri + 1].mnst.loc.x = ri + 1;
+                                map[l][rj + 1][ri + 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri + 1].mnst.loc.x = ri + 1;
                                 moved = 0;
                                 break;
                             } 
-                    }
-                    if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
-                        (rj + 1 != g.player.y || ri + 1 != g.player.x)){
-                        if(1){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj + 1][ri + 1].mnst;
-                            map[l][rj + 1][ri + 1].mnst = temp;
 
-                            map[l][rj + 1][ri + 1].mnst.loc.y = rj + 1;
-                            map[l][rj + 1][ri + 1].mnst.loc.x = ri + 1;
-                            moved = 0;
-                            break;
-                        } 
-
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
-                        (rj + 1 != g.player.y || ri - 1 != g.player.x)){
-                        if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj + 1][ri - 1].mnst;
-                            map[l][rj + 1][ri - 1].mnst = temp;
-
-                            map[l][rj + 1][ri - 1].mnst.loc.y = rj + 1;
-                            map[l][rj + 1][ri - 1].mnst.loc.x = ri - 1;
-                            moved = 0;
-                            break;
                         }
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
-                        (rj - 1 != g.player.y || ri - 1 != g.player.x)){
-                        if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj - 1][ri - 1].mnst;
-                            map[l][rj - 1][ri - 1].mnst = temp;
-
-                            map[l][rj - 1][ri - 1].mnst.loc.y = rj - 1;
-                            map[l][rj - 1][ri - 1].mnst.loc.x = ri - 1;
-                            moved = 0;
-                            break;
-                        } 
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
-                        (ri + 1 != g.player.x)){
-                            if(1){
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj + 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
                                 temp = map[l][rj][ri].mnst;
-                                map[l][rj][ri].mnst = map[l][rj][ri + 1].mnst;
-                                map[l][rj][ri + 1].mnst = temp;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri - 1].mnst;
+                                map[l][rj + 1][ri - 1].mnst = temp;
 
-                                map[l][rj][ri + 1].mnst.loc.x = ri + 1;
+                                map[l][rj + 1][ri - 1].mnst.loc.y = rj + 1;
+                                map[l][rj + 1][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (rj - 1 != g.player.y || ri - 1 != g.player.x)){
+                            if(1/*ch == KEY_RIGHT || ch == KEY_LEFT*/){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri - 1].mnst;
+                                map[l][rj - 1][ri - 1].mnst = temp;
+
+                                map[l][rj - 1][ri - 1].mnst.loc.y = rj - 1;
+                                map[l][rj - 1][ri - 1].mnst.loc.x = ri - 1;
                                 moved = 0;
                                 break;
                             } 
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
-                        (ri - 1 != g.player.x)){
-                        if(1){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj][ri - 1].mnst;
-                            map[l][rj][ri - 1].mnst = temp;
-
-                            map[l][rj][ri - 1].mnst.loc.x = ri - 1;
-                            moved = 0;
-                            break;
-                        } 
-
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
-                        (rj + 1 != g.player.y)){
-                        if(1){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj + 1][ri].mnst;
-                            map[l][rj + 1][ri].mnst = temp;
-
-                            map[l][rj + 1][ri].mnst.loc.y = rj + 1;
-                            moved = 0;
-                            break;
                         }
-                    }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
-                        (rj - 1 != g.player.y)){
-                        if(1){
-                            temp = map[l][rj][ri].mnst;
-                            map[l][rj][ri].mnst = map[l][rj - 1][ri].mnst;
-                            map[l][rj - 1][ri].mnst = temp;
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x > 0 &&
+                            (ri + 1 != g.player.x)){
+                                if(1){
+                                    temp = map[l][rj][ri].mnst;
+                                    map[l][rj][ri].mnst = map[l][rj][ri + 1].mnst;
+                                    map[l][rj][ri + 1].mnst = temp;
 
-                            map[l][rj - 1][ri].mnst.loc.y = rj - 1;
-                            moved = 0;
-                            break;
-                        } 
+                                    map[l][rj][ri + 1].mnst.loc.x = ri + 1;
+                                    moved = 0;
+                                    break;
+                                } 
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x < 0 &&
+                            (ri - 1 != g.player.x)){
+                            if(1){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj][ri - 1].mnst;
+                                map[l][rj][ri - 1].mnst = temp;
+
+                                map[l][rj][ri - 1].mnst.loc.x = ri - 1;
+                                moved = 0;
+                                break;
+                            } 
+
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y > 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj + 1 != g.player.y)){
+                            if(1){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj + 1][ri].mnst;
+                                map[l][rj + 1][ri].mnst = temp;
+
+                                map[l][rj + 1][ri].mnst.loc.y = rj + 1;
+                                moved = 0;
+                                break;
+                            }
+                        }
+                        else if (g.player.y - map[l][rj][ri].mnst.loc.y < 0  &&
+                            g.player.x - map[l][rj][ri].mnst.loc.x == 0 &&
+                            (rj - 1 != g.player.y)){
+                            if(1){
+                                temp = map[l][rj][ri].mnst;
+                                map[l][rj][ri].mnst = map[l][rj - 1][ri].mnst;
+                                map[l][rj - 1][ri].mnst = temp;
+
+                                map[l][rj - 1][ri].mnst.loc.y = rj - 1;
+                                moved = 0;
+                                break;
+                            } 
+                        }
                     }
                 }
             }
@@ -4220,166 +4972,83 @@ void mosters_moving_around(int ch){
     }
 }
 void move_fire_breathing_moster(){
-    fire_breathing_step++;
-    Enemies temp;
-    for(int rj=0 ; rj<45 ; rj++){
-        for(int ri=0 ; ri<184;ri++){
-            if(map[l][rj][ri].fire.kind == 2){
-                if(fire_breathing_step == 2 || fire_breathing_step == 1){
-                    temp = map[l][rj][ri].fire;
-                    map[l][rj][ri].fire = map[l][rj][ri + 1].fire;
-                    map[l][rj][ri + 1].fire = temp;  
-                    map[l][rj][ri + 1].fire.loc.x = ri - 1;
-                    
-                }             
-            }
+    for (int ri = 0 ; ri < 184 ; ri++){
+        for (int rj = 0 ; rj < 45 ; rj++){
+            if(map[l][rj][ri].mnst.sign == 'G'){ 
+                if(map[l][rj][ri].mnst.moved_once == 0){
+                    for (int t = -2 ; t <= 2 ; t++){
+                        for(int h = -2 ; h <= 2 ; h++){
+                            if (g.player.x == ri + h && g.player.y == rj + t){
+                                map[l][rj][ri].mnst.moveable = 1; 
+                                map[l][rj][ri].mnst.moved_once = 1; 
+                            }
+                        }
+                    }
+                }          
+             }
+            if(map[l][rj][ri].mnst.sign == 'U'){ 
+                if(map[l][rj][ri].mnst.moved_once == 0){
+                    for (int t = -3 ; t <= 3 ; t++){
+                        for(int h = -3 ; h <= 3 ; h++){
+                            if (g.player.x == ri + h && g.player.y == rj + t){
+                                map[l][rj][ri].mnst.moveable = 1; 
+                                map[l][rj][ri].mnst.moved_once = 1; 
+                            }
+                        }
+                    }
+                }          
+             }             
         }
     }
-    for(int ri=184 ; ri>0;ri--){
-        for(int rj=45 ; rj>0 ; rj--){
-            if(map[l][rj][ri].fire.kind == 2){
-                if(fire_breathing_step == 3 || fire_breathing_step == 4){
-                    temp = map[l][rj][ri].fire;
-                    map[l][rj][ri].fire = map[l][rj + 1][ri].fire;
-                    map[l][rj + 1][ri].fire = temp;  
-                    map[l][rj + 1][ri].fire.loc.y = rj - 1;
-                    
-                }             
-            }
-        }
-    }
-    for(int rj=0 ; rj<45 ; rj++){
-        for(int ri=184 ; ri>0;ri--){
-            if(map[l][rj][ri].fire.kind == 2){
-                if(fire_breathing_step == 5 || fire_breathing_step == 6){
-                    temp = map[l][rj][ri].fire;
-                    map[l][rj][ri].fire = map[l][rj][ri - 1].fire;
-                    map[l][rj][ri - 1].fire = temp;  
-                    map[l][rj][ri - 1].fire.loc.x = ri + 1;
-                    
-                }             
-            }
-        }
-    }
-    for(int ri=0 ; ri<184;ri++){
-        for(int rj=0 ; rj<45 ; rj++){
-            if(map[l][rj][ri].fire.kind == 2){
-                if(fire_breathing_step == 7 || fire_breathing_step == 8){
-                    temp = map[l][rj][ri].fire;
-                    map[l][rj][ri].fire = map[l][rj - 1][ri].fire;
-                    map[l][rj - 1][ri].fire = temp;  
-                    map[l][rj - 1][ri].fire.loc.y = rj + 1;
-                }             
-            }
-        }
-    }
-    if(fire_breathing_step == 8) fire_breathing_step = 0;
-
 }
 void mosters_doing_damage(){
     for (int ri = 0 ; ri < 184 ; ri++){
         for (int rj = 0 ; rj < 45 ; rj++){
             if(map[l][rj][ri].mnst.exist){
-                if(map[l][rj][ri].mnst.sign == 'V'){
+                if(map[l][rj][ri].mnst.sign == 'V' ||
+                map[l][rj][ri].mnst.sign == 'N' ||
+                map[l][rj][ri].mnst.sign == 'G' ||
+                map[l][rj][ri].mnst.sign == 'F' ||
+                map[l][rj][ri].mnst.sign == 'U' ){
                     if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == -1){
                         damage += map[l][rj][ri].mnst.dmg;
+                        output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == 1){
                         damage += map[l][rj][ri].mnst.dmg;
+                        output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == -1){
                         damage += map[l][rj][ri].mnst.dmg;
+                                            output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == 1){
                         damage += map[l][rj][ri].mnst.dmg;
+                        output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == 0){
                         damage += map[l][rj][ri].mnst.dmg;
+                        output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == 1){
                         damage += map[l][rj][ri].mnst.dmg;
+                                            output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == -1){
                         damage += map[l][rj][ri].mnst.dmg;
+                        output_massages(20);
                         }
                     else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
                         g.player.x - map[l][rj][ri].mnst.loc.x == 0){
                         damage += map[l][rj][ri].mnst.dmg;
-                    }
-                }
-                if(map[l][rj][ri].mnst.sign == 'N'){
-                    if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == -1){
-                        damage += map[l][rj][ri].mnst.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].mnst.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].mnst.loc.x == 0){
-                        damage += map[l][rj][ri].mnst.dmg;
-                    }
-                }
-                if(map[l][rj][ri].fire.sign == 'F'){
-                    if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == 0){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == 1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == 0  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == -1){
-                        damage += map[l][rj][ri].fire.dmg;
-                        }
-                    else if (g.player.y - map[l][rj][ri].fire.loc.y == -1  &&
-                        g.player.x - map[l][rj][ri].fire.loc.x == 0){
-                        damage += map[l][rj][ri].fire.dmg;
+                        output_massages(20);
                     }
                 }
             }
@@ -4400,19 +5069,62 @@ void treasure_layer(){
              map[4][j][i].flags = 1;           
         }
     }
+    //Giant
     //Deamon
     int num = (rand()%24)+14;
+
     for (int u = 0 ; u < num ; u++){
-    Pos deamon;
-        deamon.x = rand()%(120 - 60 - 1) + 60 + 1;
-        deamon.y = rand()%(26 - 5) +   3 ;
-        map[4][deamon.y][deamon.x].mnst.sign = 'N';
-        map[4][deamon.y][deamon.x].mnst.hth = 5;
-        map[4][deamon.y][deamon.x].mnst.dmg = 5; 
-        map[4][deamon.y][deamon.x].mnst.exist = 1;
-        map[4][deamon.y][deamon.x].mnst.moveable = 0;         
-        map[4][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
-        map[4][deamon.y][deamon.x].mnst.loc.y =  deamon.y ;    
+        int chan = rand()%8;
+        if(chan == 3){
+            Pos Giant;
+            int healthpotion = 3;
+            switch(healthpotion){
+            case 0 ... 2:
+                break;
+            case 3:
+                Giant.x = rand()%(120 - 60 - 1) + 60 + 1;
+                Giant.y = rand()%(26 - 2 - 1) +   3 ;
+                map[4][Giant.y][Giant.x].mnst.sign = 'G';
+                map[4][Giant.y][Giant.x].mnst.hth = 25;
+                map[4][Giant.y][Giant.x].mnst.dmg = 8; 
+                map[4][Giant.y][Giant.x].mnst.exist = 1;
+                map[4][Giant.y][Giant.x].mnst.kind = 'G';  
+                map[4][Giant.y][Giant.x].mnst.moved_once = 0; 
+                map[4][Giant.y][Giant.x].mnst.move_amount = 0;                     
+                map[4][Giant.y][Giant.x].mnst.moveable = 0;         
+                map[4][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
+                map[4][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
+                break;
+            default:
+                break;
+            }   
+        }
+        Pos deamon;
+            deamon.x = rand()%(120 - 60 - 1) + 60 + 1;
+            deamon.y = rand()%(26 - 5) +   3 ;
+            map[4][deamon.y][deamon.x].mnst.sign = 'N';
+            map[4][deamon.y][deamon.x].mnst.hth = 5;
+            map[4][deamon.y][deamon.x].mnst.dmg = 5; 
+            map[4][deamon.y][deamon.x].mnst.exist = 1;
+            map[4][deamon.y][deamon.x].mnst.moveable = 0;         
+            map[4][deamon.y][deamon.x].mnst.loc.x =  deamon.x ;  
+            map[4][deamon.y][deamon.x].mnst.loc.y =  deamon.y ; 
+        int chanfa = rand()%5;
+        if(chanfa == 3){
+            Pos fire;
+                fire.x = rand()%(120 - 60 - 1) + 60 + 1;
+                fire.y = rand()%(26 - 5) +   3 ;
+
+                map[4][fire.y][fire.x].mnst.sign = 'F';
+                map[4][fire.y][fire.x].mnst.hth = 10;
+                map[4][fire.y][fire.x].mnst.dmg = 5; 
+                map[4][fire.y][fire.x].mnst.exist = 1;
+                map[4][fire.y][fire.x].mnst.moveable = 0;  
+                map[4][fire.y][fire.x].mnst.moved_once = 0;
+                map[4][fire.y][fire.x].mnst.kind = 2;        
+                map[4][fire.y][fire.x].mnst.loc.x =  fire.x ;  
+                map[4][fire.y][fire.x].mnst.loc.y =  fire.y ;      
+        }
     for (int i = 0 ; i < 2 ; i++){
     Pos trap_1 , trap_2 , trap_3;
         trap_1.x = rand()%(120 - 60 - 1) + 60 + 1;
@@ -4438,7 +5150,7 @@ void treasure_layer(){
         map[4][gold_3.y][gold_3.x].signs = 'G';
         darkgold_1.x =rand()%(120 - 60 - 1) + 60 + 1;
         darkgold_1.y =rand()%(26 - 2 - 1) +   3 ;
-        map[l][darkgold_1.y][darkgold_1.x].signs = 'D';    
+        map[4][darkgold_1.y][darkgold_1.x].signs = 'D';    
     }
     for (int i = 60 ; i <= 120 ;i ++){
         for (int j = 0 ; j < 26 ; j++ ){
@@ -4450,6 +5162,26 @@ void treasure_layer(){
             }
         }
     }
+        Pos Giant;
+        int healthpotion = 3;
+        switch(healthpotion){
+        case 0 ... 2:
+            break;
+        case 3:
+            Giant.x = rand()%(120 - 60 - 1) + 60 + 1;
+            Giant.y = rand()%(26 - 2 - 1) +   3 ;
+            map[4][Giant.y][Giant.x].mnst.sign = 'V';
+            map[4][Giant.y][Giant.x].mnst.hth = 20;
+            map[4][Giant.y][Giant.x].mnst.dmg = 5; 
+            map[4][Giant.y][Giant.x].mnst.exist = 1;
+            map[4][Giant.y][Giant.x].mnst.moved_once = 0;
+            map[4][Giant.y][Giant.x].mnst.moveable = 0;         
+            map[4][Giant.y][Giant.x].mnst.loc.x =  Giant.x ;  
+            map[4][Giant.y][Giant.x].mnst.loc.y =  Giant.y ;        
+            break;
+        default:
+            break;
+        }
     Pos win;
     win.x = rand()%(120 - 60 - 1) + 60 + 1;
     win.y =rand()%(26 - 2 - 1) +   3 ;
@@ -4461,4 +5193,37 @@ void treasure_layer(){
         map[4][win.y][win.x].mnst.moveable = 0;         
         map[4][win.y][win.x].mnst.loc.x =  win.x ;  
         map[4][win.y][win.x].mnst.loc.y =  win.y ;  
+}
+
+int are_you_sure_page(){
+
+    const char *levels[] = {"Yes", "No" };
+    int choice = 0;
+    back_ground_sky();
+    mvprintw(LINES / 2 - 9, COLS / 2 - 20, " ___________________________________");
+    mvprintw(LINES / 2 - 8, COLS / 2 - 20, "|                                   |");
+    mvprintw(LINES / 2 - 7, COLS / 2 - 20, "|            Are you Sure?          |");
+    mvprintw(LINES / 2 - 6, COLS / 2 - 20, "|                                   |");
+    mvprintw(LINES / 2 - 5, COLS / 2 - 20, "|       Yes                 No      |");
+    mvprintw(LINES / 2 - 4, COLS / 2 - 20, "|___________________________________|");
+    while (1){
+        mvprintw(1, 1, " ");
+        for (int i = 0; i < 2; ++i){
+            if (i == choice)
+                attron(A_REVERSE);
+            mvprintw(LINES / 2 - 5, COLS / 2 - 12  + 20*i, "%s", levels[i]);
+            if (i == choice)
+                attroff(A_REVERSE);
+        }
+
+        int ch = getch();
+        if (ch == KEY_RIGHT)
+            choice = (choice == 0) ? 1 : choice - 1;
+        else if (ch == KEY_LEFT)
+            choice = (choice == 1) ? 0 : choice + 1;
+        else if (ch == 10)
+            break;
+    }
+
+    return choice;
 }
